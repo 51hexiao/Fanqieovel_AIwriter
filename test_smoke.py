@@ -291,3 +291,47 @@ time.sleep(1.0)  # 等后台任务自行失败（无Key），计数在启动前�
 rows27 = {t["id"]: t for t in c.get("/api/topics").json()}
 ok27 = (rows27[tid27]["used_count"] == 2 and rows27[tid27]["status"] == "used")
 print("27) 选题重复使用+计数:", ok27)
+
+# 28) 大纲→吸睛标题→写作：标题步改写书名、3候选存入 outline_json
+_outline28 = {
+    "characters": [{"name": "我", "role": "母亲", "secret": "孩子不是普通孩子"}],
+    "narrator": "我是考生家长",
+    "sections": [
+        {"no": 1, "beats": ["反常开场"], "hook": "断章"},
+        {"no": 2, "beats": ["冲突升级"], "hook": "断章"},
+    ],
+    "clues": [{"what": "准考证", "planted": "第1节", "payoff": "第2节"}],
+    "final_line": "点题",
+    "title_echo": "呼应",
+}
+_calls28 = []
+
+
+def _fake28(messages, **kw):
+    _calls28.append(list(messages))
+    u = messages[-1]["content"] if messages else ""
+    if "爆款标题样本" in u:
+        return ('{"titles": [{"text": "我儿子才三岁，你说他高考作弊？", "why": "反差"},'
+                ' {"text": "候选B", "why": "x"}, {"text": "候选C", "why": "y"}]}')
+    if "围绕下面的选题" in u:
+        return _json.dumps(_outline28, ensure_ascii=False)
+    return "正文第一段。\n摘要：我赢了"
+
+
+_orig_chat = llm.chat
+llm.chat = _fake28
+try:
+    sid28 = generator.start_story({"title": "原始选题", "hook": "卖点",
+                                   "line": "悬疑"}, log=lambda x: None)
+finally:
+    llm.chat = _orig_chat
+s28 = db.get_story(sid28)
+ok28 = (s28["title"] == "我儿子才三岁，你说他高考作弊？"
+        and len(s28["outline"].get("title_options", [])) == 3
+        and len(_calls28) == 4
+        and any("爆款标题样本" in m[-1]["content"] and "我儿子才三岁" in m[-1]["content"]
+                for m in _calls28)
+        and any("【分节剧情】" in m[-1]["content"] for m in _calls28)
+        and s28["status"] == "generated")
+print("28) 大纲→标题→写作 流水线:", ok28)
+

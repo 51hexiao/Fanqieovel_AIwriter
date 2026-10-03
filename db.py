@@ -84,13 +84,14 @@ def _assemble(sections):
 
 
 # ---------- 稿件 ----------
-def create_story(topic, outline):
+def create_story(topic, outline, title=None):
     with _lock, _conn() as c:
         cur = c.execute(
             "INSERT INTO stories(title,topic_json,outline_json,sections_json,"
             "summaries_json,body,word_count,status,line,created_at,updated_at)"
             " VALUES(?,?,?,?,?,'',0,'generating',?,?,?)",
-            (topic.get("title", ""), json.dumps(topic, ensure_ascii=False),
+            (title or topic.get("title", ""),
+             json.dumps(topic, ensure_ascii=False),
              json.dumps(outline, ensure_ascii=False), "[]", "[]",
              topic.get("line") or "悬疑", now(), now()))
         return cur.lastrowid

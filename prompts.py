@@ -152,6 +152,95 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None):
             {"role": "user", "content": user}]
 
 
+TITLE_BANK_SUS = [
+    "我儿子才三岁，你说他高考作弊？",
+    "换上我的灵根之后，团宠师弟直接原地升天！",
+    "我妈把我卖了8万，买家是我高中班主任",
+    "亲子鉴定显示孩子是我的——可我根本没结过婚",
+    "领证3小时后，他把我送进了精神病院",
+    "监控显示我昨晚在家睡觉——可我明明在凶案现场",
+    "产房外等了8小时，护士说孩子是别人的",
+    "相亲第1天他说要给我买房，第3天我成了通缉犯",
+    "全网笑我捡破烂，魔导师跪求拜师",
+    "全家偷听我心声后，疯狂改剧情",
+    "顶替我高考的人成了顶流，我当场掀了桌子",
+    "被赶出家门那晚，全城大佬排队来接我",
+]
+
+TITLE_BANK_WARM = [
+    "我妈癌症晚期，我骗保买了她的墓地",
+    "为了救女儿，我偷了闺蜜的骨髓配型报告",
+    "我爸临终前说，我不是他亲生的——DNA报告却显示我们毫无关系",
+    "婆婆逼我生儿子，产检那天我查出是双胞胎女儿",
+    "我替姐姐嫁给了植物人总裁，婚礼当晚他醒了",
+    "洪水警报响彻县城，我妈在电话里说：别回来",
+    "父亲走后第三年，我在他旧手机里翻出59条没发出去的短信",
+    "替我妈去相亲角那天，我读懂了她写了一半的征婚启事",
+]
+
+SYS_TITLE = ("你是番茄短故事的爆款标题策划。读者在信息流里只扫一眼标题，"
+             "标题要在3秒内让人心里冒出\"什么？！\"然后点进来。你只输出JSON。")
+
+
+def title_messages(topic, outline, line="悬疑"):
+    style_name = "细腻写实（温情催泪）" if line == "温情" else "无脑爽文（猎奇反差）"
+    beats = []
+    for s in outline.get("sections", []):
+        b = s.get("beats") or []
+        if b:
+            beats.append("第" + str(s.get("no")) + "节："
+                         + "、".join(str(x) for x in b))
+    outline_block = "\n".join("- " + x for x in beats) or "- （大纲无分节信息）"
+    secrets = []
+    for ch in outline.get("characters", []):
+        if ch.get("secret"):
+            secrets.append(str(ch.get("name", "？")) + "（"
+                           + str(ch.get("role", "")) + "）："
+                           + str(ch["secret"]))
+    secrets_block = "\n".join("- " + x for x in secrets) or "- （未给出）"
+    clues = []
+    for citem in outline.get("clues", []):
+        clues.append(str(citem.get("what", "")) + "（第"
+                     + str(citem.get("planted", "?")) + "节埋、第"
+                     + str(citem.get("payoff", "?")) + "节揭）")
+    clues_block = "\n".join("- " + x for x in clues) or "- （未给出）"
+    bank = TITLE_BANK_WARM if line == "温情" else TITLE_BANK_SUS
+    bank_block = "\n".join("- " + t for t in bank)
+    user = f"""刚出炉的大纲在下面，给它起一个炸裂的标题。标题要卖出大纲里最狠的那个反差或底牌，让刷到的人非点不可。
+
+选题：{topic.get('title', '')}
+卖点：{topic.get('hook', '')}
+风格线：{style_name}
+叙述者：{outline.get('narrator', '')}
+结局方向：{outline.get('final_line', '')}
+
+【分节剧情】
+{outline_block}
+
+【人物底牌】
+{secrets_block}
+
+【伏笔】
+{clues_block}
+
+【爆款标题样本：学它们的套路和劲道，禁止照抄原文】
+{bank_block}
+
+【硬性要求】
+- 15～30个字；第一人称（我/我妈/我儿子…）开头优先，让读者一秒代入
+- 前10个字必须出现冲突或反常；带具体数字、时间或身份更佳
+- 必须卖大纲里最炸的点（底牌、反转、身份差），但绝不剧透结局怎么赢
+- 猎奇感拉满：反问、破折号反转、荒诞事实并置，让人心里喊"什么？！"
+- 禁用"震惊""惊呆了"等标题党词，禁用冒号套引号的说明书式标题
+
+输出JSON（不要多余文字）：
+{{"titles": [{{"text": "标题一", "why": "一句话说明炸在哪"}}, {{"text": "标题二", "why": "…"}}, {{"text": "标题三", "why": "…"}}]}}
+
+给3个候选，第1个最强。只输出JSON。"""
+    return [{"role": "system", "content": SYS_TITLE},
+            {"role": "user", "content": user}]
+
+
 def outline_messages(topic, bench_openings=None):
     line = topic.get("line", "悬疑")
     bench_block = ""

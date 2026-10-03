@@ -80,7 +80,23 @@ def start_story(topic, log=print):
                                             bench_openings=openings or None),
                    temperature=0.8, max_tokens=3000, log=log, need_keys=["sections"])
     outline = data
-    sid = db.create_story(topic, outline)
+    new_title = (topic.get("title") or "").strip()
+    log("起吸睛标题…")
+    try:
+        tt = llm.ask_json(prompts.title_messages(topic, outline, line),
+                          temperature=0.9, max_tokens=800, log=log,
+                          need_keys=["titles"])
+        cands = [c for c in (tt.get("titles") or [])
+                 if isinstance(c, dict) and (c.get("text") or "").strip()]
+        if cands:
+            new_title = cands[0]["text"].strip()
+            outline["title_options"] = cands
+            log("定名《" + new_title + "》")
+        else:
+            log("标题候选为空，沿用选题标题")
+    except Exception as exc:
+        log("标题生成失败，沿用选题标题：" + str(exc))
+    sid = db.create_story(topic, outline, title=new_title)
     total = len(outline.get("sections", [])) or 5
     for i in range(1, total + 1):
         log(f"撰写第 {i}/{total} 节…")
