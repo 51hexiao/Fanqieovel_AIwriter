@@ -1,0 +1,8 @@
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27
+pyperclip>=1.8
+pywebview>=5
+playwright>=1.45
+# 开发模式首次准备浏览器：playwright install chromium（exe 用户不需要，找不到时会自动改用系统 Edge）
+# 打包桌面exe：pip install pyinstaller 后运行 build_desktop.bat

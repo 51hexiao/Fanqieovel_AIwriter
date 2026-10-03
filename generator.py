@@ -1,0 +1,275 @@
+# -*- coding: utf-8 -*-
+"""选题与正文生成：大纲先行、分节续写、逐节摘要保持连贯。
+双风格线：悬疑（上头法则）/ 温情（情绪法则），选题数据自带 line 字段。"""
+import json
+import random
+import re
+
+import qc as qcmod
+import db
+import llm
+import pools
+import prompts
+
+
+def _as_list(x):
+    if isinstance(x, list):
+        return x
+    if isinstance(x, dict):
+        for v in x.values():
+            if isinstance(v, list):
+                return v
+    raise ValueError("模型没有返回JSON数组")
+
+
+def _combo_text(c):
+    if "engine" in c:
+        return (f"{c['main']}·{c['plot']}·{c['bg']}·{c['emo']}"
+                f" × 人设「{c['stance']}」 × 底牌「{c['engine']}」")
+    return (f"{c['main']}·{c['plot']}·{c['emo']} × 内核「{c['core']}」"
+            f" × 设定「{c['set']}」 × 意象「{c['obj']}」")
+
+
+def _ln(line):
+    return pools.LINE_NAMES.get(line, line)
+
+
+def _gen_line_topics(n, log, line):
+    recent = [f"{t.get('title', '')}（{t.get('combo', '')}）"
+              for t in db.recent_topics(30)]
+    bench = db.bench_examples(line, 8)
+    titles = [f"{b['title']}（{b['formula']}）" if b.get("formula") else b["title"]
+              for b in bench]
+    rng = random.SystemRandom()
+    combos, seen = [], set()
+    sampler = pools.sample_combo if line == "悬疑" else pools.sample_warm_combo
+    while len(combos) < n:
+        c = sampler(rng)
+        sig = "|".join(str(v) for v in c.values())
+        if sig in seen:
+            continue
+        seen.add(sig)
+        combos.append(c)
+    log(f"调用模型生成{_ln(line)}选题（{n} 个）…")
+    data = llm.ask_json(prompts.topic_messages(combos, recent, line,
+                                          bench_titles=titles or None),
+                   temperature=1.0, max_tokens=3000, log=log, want_list=True, item_key="title")
+    items = _as_list(data)[:n]
+    out = []
+    for c, t in zip(combos, items):
+        t = t if isinstance(t, dict) else {}
+        t["combo"] = _combo_text(c)
+        t["line"] = line
+        out.append(t)
+    db.save_topics(out, source="combo")
+    log(f"已生成 {len(out)} 个{_ln(line)}选题")
+    return out
+
+
+def gen_topics(n=6, log=print, line="悬疑"):
+    """line：悬疑（无脑爽文）/ 温情（细腻写实）。"""
+    return _gen_line_topics(n, log, line)
+
+
+def start_story(topic, log=print):
+    line = topic.get("line") or "悬疑"
+    openings = [b["opening"] for b in db.bench_examples(line, 3)
+                if b.get("opening")]
+    log("设计大纲与人物…")
+    data = llm.ask_json(prompts.outline_messages(topic,
+                                            bench_openings=openings or None),
+                   temperature=0.8, max_tokens=3000, log=log, need_keys=["sections"])
+    outline = data
+    sid = db.create_story(topic, outline)
+    total = len(outline.get("sections", [])) or 5
+    for i in range(1, total + 1):
+        log(f"撰写第 {i}/{total} 节…")
+        story = db.get_story(sid)
+        raw = llm.chat(prompts.section_messages(story, i, total),
+                       temperature=llm.cfg("temperature_write", 0.85),
+                       max_tokens=3500)
+        m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
+        summary = m.group(1).strip() if m else ""
+        text = (raw[:m.start()] if m else raw).strip()
+        text = re.sub(r"^```[a-z]*\n?|```$", "", text).strip()
+        db.append_section(sid, i, text, summary)
+    db.update_story(sid, status="generated")
+    s = db.get_story(sid)
+    log(f"完成《{s['title']}》，约 {s['word_count']} 字")
+    return sid
+
+
+def review_story(sid, log=print):
+    story = db.get_story(sid)
+    line = story.get("line") or "悬疑"
+    log(f"AI审稿中（{_ln(line)}线标准：查时间线/人物/{'煽情' if line == '温情' else '底牌与节奏'}）…")
+    data = llm.ask_json(prompts.review_messages(story["title"], story["body"], line),
+                   temperature=0.3, max_tokens=2000, log=log, need_keys=["logic_score", "hook_score", "ai_risk", "issues"])
+    db.update_story(sid, review_json=json.dumps(data, ensure_ascii=False))
+    log("审稿完成")
+    return data
+
+
+def polish_story(sid, log=print):
+    story = db.get_story(sid)
+    chunks = _split_body(story["body"])
+    out = []
+    for mk, txt in chunks:
+        if not txt.strip():
+            continue
+        label = f"「{mk}」" if mk else "全文"
+        log(f"润色{label}…")
+        new = llm.chat(prompts.polish_messages(txt, story["title"]),
+                       temperature=0.5, max_tokens=4000).strip()
+        new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
+        out.append(f"{mk}\n\n{new}" if mk else new)
+    body2 = "\n\n".join(out)
+    db.update_story(sid, body=body2)
+    log("润色完成")
+    return body2
+
+def _split_body(body):
+    parts = re.split(r"\n+\s*([一二三四五六七八])\s*\n", "\n" + body)
+    chunks = []
+    if len(parts) >= 3:
+        it = iter(parts[1:])
+        for mk, txt in zip(it, it):
+            chunks.append((mk, txt.strip()))
+    else:
+        paras = [p for p in body.split("\n\n") if p.strip()]
+        mid = len(paras) // 2
+        chunks = [("", "\n\n".join(paras[:mid])),
+                  ("", "\n\n".join(paras[mid:]))]
+    return chunks
+
+
+def _load_json_field(story, key):
+    raw = story.get(key) or ""
+    try:
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def revise_story(sid, note, review_issues, qc_issues, ledger=None,
+                 log=print):
+    story = db.get_story(sid)
+    line = story.get("line") or "悬疑"
+    out = []
+    for mk, txt in _split_body(story["body"]):
+        if not txt.strip():
+            continue
+        label = f"「{mk}」" if mk else "全文"
+        log(f"改稿{label}…")
+        new = llm.chat(prompts.revise_messages(story["title"], line, note,
+                                               review_issues, qc_issues,
+                                               label, txt, ledger),
+                       temperature=0.4, max_tokens=4000).strip()
+        new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
+        out.append(f"{mk}\n\n{new}" if mk else new)
+    body2 = "\n\n".join(out)
+    db.update_story(sid, body=body2)
+    return body2
+
+
+def ledger_story(story, log=print):
+    data = llm.ask_json(prompts.ledger_messages(story["title"], story["body"]),
+                        temperature=0.1, max_tokens=1500, log=log,
+                        need_keys=["facts"])
+    rows = []
+    for f in (data.get("facts") or []):
+        if isinstance(f, dict) and f.get("fact"):
+            w = f.get("where", "")
+            rows.append(f"- {f['fact']}={f.get('value', '')}" + (f"（{w}）" if w else ""))
+    return chr(10).join(rows)
+
+
+def audit_story(sid, note, ledger=None, log=print):
+    story = db.get_story(sid)
+    line = story.get("line") or "悬疑"
+    o = _load_json_field(story, "outline_json") or {}
+    chars = "、".join(str(c.get("name", "")) for c in (o.get("characters") or [])
+                      if isinstance(c, dict) and c.get("name"))
+    rows = []
+    for c in (o.get("clues") or []):
+        if isinstance(c, dict) and c.get("what"):
+            rows.append(f"- {c['what']}（{c.get('planted', '?')}埋下，"
+                        f"{c.get('payoff', '?')}揭晓）")
+    clues = chr(10).join(rows)
+    data = llm.ask_json(prompts.audit_messages(story["title"], line, note,
+                                               chars, clues, story["body"], ledger),
+                        temperature=0.2, max_tokens=1500, log=log,
+                        need_keys=["note_done", "problems"])
+    return data
+
+
+def quality_loop(sid, note, log=print):
+    story = db.get_story(sid)
+    if story.get("status") == "published":
+        log("该稿已发布，不再进入质量环")
+        return None
+    note = (note or "").strip()
+    db.update_story(sid, note=note)
+    log("质量环启动" + (f"：作者意见「{note[:30]}…」" if len(note) > 30
+                       else (f"：作者意见「{note}」" if note else "（无意见，按清单修）")))
+
+    qc = qcmod.local_qc(story)
+    qc_issues = [f"[{lv}] {txt}" for lv, txt in qc["issues"]]
+    rev = _load_json_field(story, "review_json")
+    if not isinstance(rev, dict):
+        log("尚无AI审稿报告，先审一轮作为改稿依据…")
+        rev = review_story(sid, log)
+    review_issues = rev.get("issues", []) if isinstance(rev, dict) else []
+
+    log("提取全书事实账本…")
+    ledger = ledger_story(story, log)
+
+    audits, passed = [], False
+    rounds = 0
+    for rounds in (1, 2):
+        log(f"—— 质量环第 {rounds} 轮 ——")
+        revise_story(sid, note, review_issues, qc_issues, ledger, log=log)
+        audit = audit_story(sid, note, ledger, log=log)
+        problems = [p for p in (audit.get("problems") or []) if isinstance(p, dict)]
+        hard = [p for p in problems if (p.get("severity") or "block") == "block"]
+        audits.append({"round": rounds,
+                       "note_done": bool(audit.get("note_done")),
+                       "problems": problems, "hard": len(hard)})
+        if audit.get("note_done") and not hard:
+            passed = True
+            break
+        review_issues = list(review_issues) + [
+            {"type": "上轮校对未过", "detail": p.get("detail", ""),
+             "where": p.get("where", "")} for p in hard]
+        story = db.get_story(sid)
+        qc = qcmod.local_qc(story)
+        qc_issues = [f"[{lv}] {txt}" for lv, txt in qc["issues"]]
+
+    log("终审评分…")
+    final = review_story(sid, log)
+    qc2 = qcmod.local_qc(db.get_story(sid))
+    reasons = []
+    if not passed and audits:
+        last = [p for p in audits[-1]["problems"]
+                if (p.get("severity") or "block") == "block"]
+        reasons += [f"{p.get('where', '')}：{p.get('detail', '')}" for p in last]
+        if not last:
+            reasons.append("两轮校对仍未通过")
+    hook = final.get("hook_score", 0) if isinstance(final, dict) else 0
+    if hook < 60:
+        reasons.append(f"终审抓人分 {hook}（<60，开头会被划走）")
+    if any(lv == "block" for lv, _ in qc2["issues"]):
+        reasons.append("质检存在RISK级敏感项，需人工确认")
+    verdict = "通过" if passed and not reasons else "未过"
+    report = {"note": note, "rounds": rounds, "audits": audits,
+              "ledger": ledger,
+              "final": final, "qc_score": qc2["score"],
+              "verdict": verdict, "reasons": reasons}
+    db.update_story(sid, quality_json=json.dumps(report, ensure_ascii=False))
+    if verdict == "通过":
+        db.update_story(sid, status="approved")
+        log("✓ 质量环通过，已自动批准入库")
+    else:
+        db.update_story(sid, status="rejected")
+        log("✗ 质量环未过，已标记废弃（理由见质量环档案）")
+    return report

@@ -1,0 +1,21 @@
+# 机密与用户数据——绝不入库
+config.json
+data.db
+*.db
+browser_profile/
+*.log
+
+# 构建产物
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+
+# 临时文件
+_*.txt
+*.pkl
+
+# Windows 噪音
+Thumbs.db
+desktop.ini
