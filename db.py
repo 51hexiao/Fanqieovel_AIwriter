@@ -71,6 +71,21 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         if "used_count" not in tcols:
             c.execute("ALTER TABLE topics ADD COLUMN used_count INTEGER DEFAULT 0")
             c.execute("UPDATE topics SET used_count = 1 WHERE status = 'used'")
+        # 2026-10-03 改版：原"纯文线"并入温情线，其键位由"严谨线"（强逻辑）取代。
+        # 旧数据里的 纯文 一律归入 温情（那边存的本来就是温情向选题）。
+        c.execute("UPDATE stories SET line='温情' WHERE line='纯文'")
+        c.execute("UPDATE bench SET line='温情' WHERE line='纯文'")
+        c.execute("UPDATE OR IGNORE bench_reports SET line='温情' WHERE line='纯文'")
+        c.execute("DELETE FROM bench_reports WHERE line='纯文'")
+        for r in c.execute("SELECT id, data_json FROM topics").fetchall():
+            try:
+                d = json.loads(r["data_json"] or "{}")
+            except Exception:
+                continue
+            if isinstance(d, dict) and d.get("line") == "纯文":
+                d["line"] = "温情"
+                c.execute("UPDATE topics SET data_json=? WHERE id=?",
+                          (json.dumps(d, ensure_ascii=False), r["id"]))
 
 
 def cjk_len(s):

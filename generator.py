@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """选题与正文生成：大纲先行、标题随后、分节续写、逐节摘要保持连贯。
-四条风格线：悬疑（上头法则）/ 温情（情绪法则）/ 纯文（纯真笔触法则）/
+四条风格线：悬疑（上头法则）/ 温情（情绪法则+纯真笔触白描，原纯文线已并入）/
+严谨（强逻辑：本格悬疑、主神空间无限流，展示名"细腻写实"）/
 二创（二创铁律+上头法则），选题数据自带 line 字段。"""
 import json
 import random
@@ -27,6 +28,10 @@ def _combo_text(c):
     if "base" in c:
         return (f"{c['main']}·{c['base']}·{c['ip']} × 身份「{c['role']}」"
                 f" × 反差「{c['twist']}」 × 情怀「{c['emo']}」")
+    if "stake" in c:
+        return (f"{c['main']}·{c['plot']}·{c['bg']}·{c['emo']}"
+                f" × 谜面「{c['riddle']}」 × 破局「{c['gimmick']}」"
+                f" × 利害「{c['stake']}」")
     if "engine" in c:
         return (f"{c['main']}·{c['plot']}·{c['bg']}·{c['emo']}"
                 f" × 人设「{c['stance']}」 × 底牌「{c['engine']}」")
@@ -48,6 +53,7 @@ def _gen_line_topics(n, log, line):
     combos, seen = [], set()
     sampler = (pools.sample_combo if line == "悬疑"
                else pools.sample_fan_combo if line == "二创"
+               else pools.sample_rigor_combo if line == "严谨"
                else pools.sample_warm_combo)
     while len(combos) < n:
         c = sampler(rng)
@@ -73,7 +79,7 @@ def _gen_line_topics(n, log, line):
 
 
 def gen_topics(n=6, log=print, line="悬疑"):
-    """line：悬疑（无脑爽文）/ 温情（细腻写实）/ 纯文（纯真笔触）/ 二创（二创改编）。"""
+    """line：悬疑（无脑爽文）/ 温情（人间烟火）/ 严谨（细腻写实·强逻辑）/ 二创（二创改编）。"""
     return _gen_line_topics(n, log, line)
 
 
@@ -124,7 +130,8 @@ def start_story(topic, log=print):
 def review_story(sid, log=print):
     story = db.get_story(sid)
     line = story.get("line") or "悬疑"
-    log(f"AI审稿中（{_ln(line)}线标准：查时间线/人物/{'煽情' if line == '温情' else '底牌与节奏'}）…")
+    log(f"AI审稿中（{_ln(line)}线标准：查时间线/人物/"
+        f"{'煽情' if line == '温情' else '逻辑与伏笔' if line == '严谨' else '底牌与节奏'}）…")
     data = llm.ask_json(prompts.review_messages(story["title"], story["body"], line),
                    temperature=0.3, max_tokens=2000, log=log, need_keys=["logic_score", "hook_score", "ai_risk", "issues"])
     db.update_story(sid, review_json=json.dumps(data, ensure_ascii=False))

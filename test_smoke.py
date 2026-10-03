@@ -124,10 +124,11 @@ print("17) 官方分类池抽样:", ok17,
       "| 角色标签注入:", "白月光" in mrole and "狼人" in mrole,
       "| 清醒人设口径:", "人设" in mrole and "憋屈让读者受" in mrole)
 
-# 18) 双线定位改名：爽感法则 / 细腻写实
+# 18) 四线定位：爽感法则（悬疑）/ 情绪法则+白描（温情）/ 严谨法则（严谨）
 print("18) 线定位:", "爽感法则" in prompts.SYS_WRITER
       and "无欲无求" in prompts.SYS_WRITER and "不内耗" in prompts.SYS_WRITER
-      and "细腻写实短篇" in prompts.SYS_WRITER_WARM
+      and "人间烟火" in prompts.SYS_WRITER_WARM and "白描" in prompts.SYS_WRITER_WARM
+      and "严谨法则" in prompts.SYS_WRITER_RIGOR and "验算" in prompts.SYS_WRITER_RIGOR
       and "证据链" not in prompts.review_messages("t", "b", line="悬疑")[1]["content"]
       and pools.LINE_NAMES["悬疑"] == "无脑爽文")
 
@@ -335,50 +336,73 @@ ok28 = (s28["title"] == "我儿子才三岁，你说他高考作弊？"
         and s28["status"] == "generated")
 print("28) 大纲→标题→写作 流水线:", ok28)
 
-# 29) 纯文线：纯真笔触口径贯通（选题/大纲/分节/审稿/标题库/温情去猎奇）
-_t29 = {"title": "外婆的顶针", "hook": "小事", "line": "纯文"}
+# 29) 温情线合并人间烟火（吸收纯真笔触文笔）+ 严谨线细腻写实（强逻辑悬疑/无限流）
+_t29w = {"title": "外婆的顶针", "hook": "小事", "line": "温情"}
+_t29r = {"title": "死者手表慢了七分钟", "hook": "谜面", "line": "严谨"}
 _o29 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
         "characters": [], "clues": [], "narrator": "我"}
-m29_top = prompts.topic_messages(
+_or29 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+         "characters": [], "clues": [], "narrator": "我",
+         "rules": "每日凌晨副本刷新规则一条，违者抹杀"}
+m29_topw = prompts.topic_messages(
     [{"main": "家庭亲情", "plot": "日常", "emo": "温暖",
-      "core": "亏欠", "set": "无", "obj": "顶针"}], [], line="纯文")
-m29_out = prompts.outline_messages(_t29)
-m29_sec = prompts.section_messages(
-    {"title": "x", "line": "纯文", "topic": {"line": "纯文"},
+      "core": "亏欠", "set": "无", "obj": "顶针"}], [], line="温情")
+m29_topr = prompts.topic_messages(
+    [{"main": "悬疑惊悚", "plot": "推理", "bg": "现代", "emo": "惊悚",
+      "riddle": "现场干净得反常", "gimmick": "监控被删改的时间差",
+      "stake": "破不了案，下一个就是我"}], [], line="严谨")
+m29_outw = prompts.outline_messages(_t29w)
+m29_outr = prompts.outline_messages(_t29r)
+m29_secw = prompts.section_messages(
+    {"title": "x", "line": "温情", "topic": {"line": "温情"},
      "outline": _o29, "summaries": []}, 1, 5)
-m29_rev = prompts.review_messages("x", "正文", line="纯文")
-m29_tt = prompts.title_messages(_t29, _o29, line="纯文")
-m29_ttw = prompts.title_messages(
-    {"title": "x", "hook": "y", "line": "温情"}, _o29, line="温情")
+m29_secr = prompts.section_messages(
+    {"title": "x", "line": "严谨", "topic": {"line": "严谨"},
+     "outline": _or29, "summaries": []}, 1, 5)
+m29_rev = prompts.review_messages("x", "正文", line="温情")
+m29_revr = prompts.review_messages("x", "正文", line="严谨")
+m29_tt = prompts.title_messages(_t29w, _o29, line="温情")
+m29_ttw = prompts.title_messages(_t29r, _o29, line="严谨")
 m29_tts = prompts.title_messages(
     {"title": "x", "hook": "y", "line": "悬疑"}, _o29, line="悬疑")
 usrc = io.open("static/index.html", encoding="utf-8").read()
-ok29 = (pools.LINE_NAMES.get("纯文") == "纯真笔触"
-    and m29_top[0]["content"] == prompts.SYS_TOPIC_PURE
-    and "8-18" in m29_top[1]["content"]
-    and "两段式" in m29_top[1]["content"]
-    and m29_out[0]["content"] == prompts.SYS_WRITER_PURE
-    and "文笔要求" in m29_out[1]["content"]
-    and m29_sec[0]["content"] == prompts.SYS_WRITER_PURE
-    and "纯真笔触法则" in m29_sec[1]["content"]
-    and m29_rev[0]["content"] == prompts.SYS_REVIEW_PURE
-    and "文笔" in m29_rev[1]["content"]
-    and "雪落进父亲的搪瓷缸里" not in m29_tt[1]["content"]
-    and "厨房的灯，她留了二十年" in m29_tt[1]["content"]
+ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
+    and pools.LINE_NAMES.get("严谨") == "细腻写实"
+    and m29_topw[0]["content"] == prompts.SYS_TOPIC_WARM
+    and "意象" in m29_topw[1]["content"] and "两段式" in m29_topw[1]["content"]
+    and m29_topr[0]["content"] == prompts.SYS_TOPIC_RIGOR
+    and "谜面" in m29_topr[1]["content"]
+    and "死者手表慢了七分钟" in m29_topr[1]["content"]
+    and m29_outw[0]["content"] == prompts.SYS_WRITER_WARM
+    and "motif" in m29_outw[1]["content"]
+    and "情绪压强" in m29_outw[1]["content"]
+    and m29_outr[0]["content"] == prompts.SYS_WRITER_RIGOR
+    and '"rules"' in m29_outr[1]["content"]
+    and "严谨要求" in m29_outr[1]["content"]
+    and m29_secw[0]["content"] == prompts.SYS_WRITER_WARM
+    and "情绪法则" in m29_secw[1]["content"]
+    and m29_secr[0]["content"] == prompts.SYS_WRITER_RIGOR
+    and "规则全文" in m29_secr[1]["content"]
+    and "严谨法则" in m29_secr[1]["content"]
+    and m29_rev[0]["content"] == prompts.SYS_REVIEW_WARM
+    and "煽情" in m29_rev[1]["content"]
+    and m29_revr[0]["content"] == prompts.SYS_REVIEW_RIGOR
+    and "logic_score" in m29_revr[1]["content"]
+    and "我爸临终前说，我不是他亲生的" in m29_tt[1]["content"]
     and "两段式" in m29_tt[1]["content"]
+    and "不玩猎奇反转" in m29_tt[1]["content"]
+    and "死者手表慢了七分钟，我翻出了第三份口供" in m29_ttw[1]["content"]
     and "两段式" in m29_ttw[1]["content"]
-    and "猎奇感拉满" not in m29_tt[1]["content"]
-    and "猎奇感拉满" not in m29_ttw[1]["content"]
-    and "不玩猎奇反转" in m29_ttw[1]["content"]
     and "两段式" in m29_tts[1]["content"]
     and "我儿子才三岁" in m29_tts[1]["content"]
-    and 'data-line="纯文"' in usrc and "src-pure" in usrc
-    and "'纯文': '纯真笔触'" in usrc)
-print("29) 纯文线（纯真笔触）:", ok29)
+    and 'data-line="温情"' in usrc and 'data-line="严谨"' in usrc
+    and "src-rigor" in usrc and "'严谨': '细腻写实'" in usrc
+    and 'data-line="纯文"' not in usrc and "src-pure" not in usrc)
+print("29) 温情=人间烟火+严谨=细腻写实:", ok29)
 
 # 30) 标题统一两段式：三条线标题要求均含两段式，样本库全两段
 banks30 = (prompts.TITLE_BANK_SUS + prompts.TITLE_BANK_WARM
-           + prompts.TITLE_BANK_PURE + prompts.TITLE_BANK_FAN)
+           + prompts.TITLE_BANK_RIGOR + prompts.TITLE_BANK_FAN)
 import re as _re
 def _two_part(t):
     return bool(_re.search(r"[，,——？?！!]", t))
