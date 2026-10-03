@@ -56,6 +56,7 @@ button.mini{padding:3px 10px;font-size:12px}
 .src-hot{color:var(--amber);background:rgba(196,125,16,.1)}
 .src-manual{color:var(--cyan);background:rgba(14,138,168,.1)}
 .src-warm{color:#b4547a;background:rgba(180,84,122,.1)}
+.src-pure{color:#0f766e;background:rgba(13,148,136,.1)}
 .t-hotline{font-size:12px;color:var(--muted);margin-bottom:8px}
 .t-hotline b{color:var(--amber);font-weight:600}
 .fbtn.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
@@ -79,6 +80,7 @@ tbody tr:hover td{background:#f6f9ff}
 .b-published{color:var(--muted);border-color:var(--line);background:var(--panel2)}
 .b-rejected{color:var(--red);border-color:rgba(212,60,51,.35);background:rgba(212,60,51,.07)}
 .b-warm{color:#b4547a;border-color:rgba(180,84,122,.35);background:rgba(180,84,122,.07)}
+.b-pure{color:#0f766e;border-color:rgba(13,148,136,.35);background:rgba(13,148,136,.07)}
 
 textarea,input[type=text],input[type=password],select{width:100%;padding:9px 12px;background:#fff;
   border:1px solid var(--line);border-radius:6px;color:var(--text);font-family:inherit;font-size:13.5px}
@@ -167,6 +169,7 @@ details.t-more .t-meta{margin-bottom:0}
     <span class="hint" style="margin-right:-4px">风格</span>
     <button class="lbtn active" data-line="悬疑" onclick="setLine(this)" title="前半憋屈给读者，主角清醒或无欲无求不内耗，后半反击爽，最终胜利属于主角">🗡 无脑爽文</button>
     <button class="lbtn" data-line="温情" onclick="setLine(this)" title="细腻写实，真挚情感，允许极轻梦幻点缀">🏮 细腻写实</button>
+    <button class="lbtn" data-line="纯文" onclick="setLine(this)" title="文笔功力优先：白描克制、纯真笔触，情绪落在物件与动作上，安静但让人心头一颤">🖋 纯真笔触</button>
     <span class="lsep"></span>
     <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
     <span class="status" id="topics-status"></span>
@@ -241,6 +244,7 @@ details.t-more .t-meta{margin-bottom:0}
     <select id="bench-line" style="max-width:120px" onchange="loadBench()">
       <option value="悬疑">无脑爽文</option>
       <option value="温情">细腻写实</option>
+      <option value="纯文">纯真笔触</option>
     </select>
     <button class="primary" onclick="addBench()">拆解入库</button>
     <button onclick="makeReport()" title="汇总同线所有拆解，提炼共同点">生成共性报告</button>
@@ -378,7 +382,7 @@ async function poll(tid, onStage) {
 }
 
 /* ---------- 选题库 ---------- */
-const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '细腻写实'};
+const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '细腻写实', '纯文': '纯真笔触'};
 let topicFilter = '';
 const topicSel = new Set();
 
@@ -441,7 +445,7 @@ async function loadTopics() {
     <div class="card${topicSel.has(t.id) ? ' selected' : ''}">
       <input type="checkbox" class="t-pick" title="多选" ${topicSel.has(t.id) ? 'checked' : ''} onchange="pickTopic(${t.id}, this.checked, this)">
       <button class="t-del" title="删除这条选题" onclick="delTopic(${t.id})">✕</button>
-      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line === '温情' ? '<span class="t-src src-warm">细腻写实</span>' : ''}${t.used_count ? `<span class="t-src src-used">已用${t.used_count}次</span>` : ''}</div>
+      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line && t.line !== '悬疑' ? `<span class="t-src ${t.line === '纯文' ? 'src-pure' : 'src-warm'}">${LINE_NAMES[t.line] || t.line}</span>` : ''}${t.used_count ? `<span class="t-src src-used">已用${t.used_count}次</span>` : ''}</div>
       ${tag}${combo}
       <div class="t-hook" title="${esc(t.hook || '')}">${esc(t.hook || '')}</div>
       <details class="t-more"><summary>议题与差异</summary>
@@ -501,7 +505,7 @@ async function loadStories() {
     return `<tr>
       <td class="dim">#${s.id}</td>
       <td><span class="link" onclick="openStory(${s.id})">${esc(s.title) || '(未命名)'}</span></td>
-      <td>${s.line === '温情' ? '<span class="badge b-warm">细腻写实</span>' : '<span class="dim">无脑爽文</span>'}</td>
+      <td>${s.line === '悬疑' ? '<span class="dim">无脑爽文</span>' : `<span class="badge ${s.line === '纯文' ? 'b-pure' : 'b-warm'}">${LINE_NAMES[s.line] || s.line}</span>`}</td>
       <td>${s.word_count}</td>
       <td><span class="badge ${st[1]}">${st[0]}</span></td>
       <td class="dim">${esc(s.updated_at || '')}</td>
@@ -665,9 +669,9 @@ async function loadBench() {
     api('/api/bench/report?line=' + encodeURIComponent(line)).catch(() => ({report: null}))]);
   $('#bench-list').innerHTML = items.length ? items.map(b => {
     const d = b.data || {};
-    const chip = b.line === '温情'
-      ? '<span class="t-src src-warm">细腻写实</span>'
-      : '<span class="t-src" style="color:var(--acc);background:var(--acc-dim)">无脑爽文</span>';
+    const chip = b.line === '悬疑'
+      ? '<span class="t-src" style="color:var(--acc);background:var(--acc-dim)">无脑爽文</span>'
+      : `<span class="t-src ${b.line === '纯文' ? 'src-pure' : 'src-warm'}">${LINE_NAMES[b.line] || b.line}</span>`;
     return `
     <div class="card">
       <button class="t-del" title="删除这条拆解" onclick="delBench(${b.id})">✕</button>

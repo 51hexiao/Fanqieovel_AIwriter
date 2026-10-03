@@ -335,3 +335,36 @@ ok28 = (s28["title"] == "我儿子才三岁，你说他高考作弊？"
         and s28["status"] == "generated")
 print("28) 大纲→标题→写作 流水线:", ok28)
 
+# 29) 纯文线：纯真笔触口径贯通（选题/大纲/分节/审稿/标题库/温情去猎奇）
+_t29 = {"title": "外婆的顶针", "hook": "小事", "line": "纯文"}
+_o29 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+        "characters": [], "clues": [], "narrator": "我"}
+m29_top = prompts.topic_messages(
+    [{"main": "家庭亲情", "plot": "日常", "emo": "温暖",
+      "core": "亏欠", "set": "无", "obj": "顶针"}], [], line="纯文")
+m29_out = prompts.outline_messages(_t29)
+m29_sec = prompts.section_messages(
+    {"title": "x", "line": "纯文", "topic": {"line": "纯文"},
+     "outline": _o29, "summaries": []}, 1, 5)
+m29_rev = prompts.review_messages("x", "正文", line="纯文")
+m29_tt = prompts.title_messages(_t29, _o29, line="纯文")
+m29_ttw = prompts.title_messages(
+    {"title": "x", "hook": "y", "line": "温情"}, _o29, line="温情")
+usrc = io.open("static/index.html", encoding="utf-8").read()
+ok29 = (pools.LINE_NAMES.get("纯文") == "纯真笔触"
+    and m29_top[0]["content"] == prompts.SYS_TOPIC_PURE
+    and "8-18" in m29_top[1]["content"]
+    and m29_out[0]["content"] == prompts.SYS_WRITER_PURE
+    and "文笔要求" in m29_out[1]["content"]
+    and m29_sec[0]["content"] == prompts.SYS_WRITER_PURE
+    and "纯真笔触法则" in m29_sec[1]["content"]
+    and m29_rev[0]["content"] == prompts.SYS_REVIEW_PURE
+    and "文笔" in m29_rev[1]["content"]
+    and "雪落进父亲的搪瓷缸里" in m29_tt[1]["content"]
+    and "猎奇感拉满" not in m29_tt[1]["content"]
+    and "猎奇感拉满" not in m29_ttw[1]["content"]
+    and "不玩猎奇反转" in m29_ttw[1]["content"]
+    and 'data-line="纯文"' in usrc and "src-pure" in usrc
+    and "'纯文': '纯真笔触'" in usrc)
+print("29) 纯文线（纯真笔触）:", ok29)
+
