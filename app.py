@@ -404,7 +404,7 @@ def _auto_draft(ctx, page, s, log):
     body_loc = (editor.locator(sel["editor"]) if sel.get("editor")
                 else _pick_body(editor))
     import pyperclip
-    pyperclip.copy(s["body"])
+    pyperclip.copy(db.clean_text(s["body"]))
     body_loc.first.click()
     editor.keyboard.press("Control+a")
     editor.keyboard.press("Control+v")
@@ -474,7 +474,7 @@ def copy_part(sid: int, part: str):
         raise HTTPException(404, "稿件不存在")
     if part not in ("title", "body"):
         raise HTTPException(400, "part 必须是 title 或 body")
-    text = s["title"] if part == "title" else s["body"]
+    text = s["title"] if part == "title" else db.clean_text(s["body"])
     if not (text or "").strip():
         raise HTTPException(400, "内容为空")
     import pyperclip

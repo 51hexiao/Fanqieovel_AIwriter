@@ -144,8 +144,8 @@ def polish_story(sid, log=print):
         new = llm.chat(prompts.polish_messages(txt, story["title"]),
                        temperature=0.5, max_tokens=4000).strip()
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
-        out.append(f"{mk}\n\n{new}" if mk else new)
-    body2 = "\n\n".join(out)
+        out.append(f"{mk}\n{new}" if mk else new)
+    body2 = db.clean_text("\n".join(out))
     db.update_story(sid, body=body2)
     log("润色完成")
     return body2
@@ -158,10 +158,10 @@ def _split_body(body):
         for mk, txt in zip(it, it):
             chunks.append((mk, txt.strip()))
     else:
-        paras = [p for p in body.split("\n\n") if p.strip()]
+        paras = [p for p in body.split("\n") if p.strip()]
         mid = len(paras) // 2
-        chunks = [("", "\n\n".join(paras[:mid])),
-                  ("", "\n\n".join(paras[mid:]))]
+        chunks = [("", "\n".join(paras[:mid])),
+                  ("", "\n".join(paras[mid:]))]
     return chunks
 
 
@@ -188,8 +188,8 @@ def revise_story(sid, note, review_issues, qc_issues, ledger=None,
                                                label, txt, ledger),
                        temperature=0.4, max_tokens=4000).strip()
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
-        out.append(f"{mk}\n\n{new}" if mk else new)
-    body2 = "\n\n".join(out)
+        out.append(f"{mk}\n{new}" if mk else new)
+    body2 = db.clean_text("\n".join(out))
     db.update_story(sid, body=body2)
     return body2
 

@@ -416,3 +416,19 @@ ok31 &= (m31_top[0]["content"] == prompts.SYS_TOPIC_FAN
 print("31) 二创线（二创改编）:", ok31)
 
 
+
+# 32) 正文单换行：组装/保存/拆分全链路不再出现空行
+sid32 = db.create_story({"title": "格式测试", "line": "悬疑"}, {})
+db.append_section(sid32, 1, "第一段。\n\n\n第二段。", "一")
+db.append_section(sid32, 2, "第三段。\n\n第四段。", "二")
+s32 = db.get_story(sid32)
+ok32 = (s32["body"] == "一\n第一段。\n第二段。\n二\n第三段。\n第四段。")
+db.update_story(sid32, body="一\n\n老稿双换行\n\n二\n\n尾部")
+s32 = db.get_story(sid32)
+ok32 &= (s32["body"] == "一\n老稿双换行\n二\n尾部"
+    and db.clean_text("a\r\n\r\nb") == "a\nb")
+chunks32 = generator._split_body("一\n甲\n乙\n二\n丙")
+ok32 &= (len(chunks32) == 2 and chunks32[0][0] == "一"
+    and chunks32[1][0] == "二" and chunks32[1][1] == "丙")
+db.delete_story(sid32)
+print("32) 正文单换行格式:", ok32)

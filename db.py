@@ -77,10 +77,16 @@ def cjk_len(s):
     return len(re.findall(r"[\u4e00-\u9fff]", s or ""))
 
 
+def clean_text(text):
+    """正文统一单换行分段：编辑器显示与番茄粘贴都不会出现空行。"""
+    t = (text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    return re.sub(r"\n{2,}", "\n", t)
+
+
 def _assemble(sections):
     secs = sorted(sections, key=lambda x: x["no"])
-    return "\n\n".join(
-        f"{MARKERS[s['no'] - 1]}\n\n{s['text'].strip()}" for s in secs)
+    return "\n".join(
+        f"{MARKERS[s['no'] - 1]}\n{clean_text(s['text'])}" for s in secs)
 
 
 # ---------- 稿件 ----------
@@ -124,6 +130,7 @@ def list_stories():
 
 def update_story(sid, **fields):
     if "body" in fields:
+        fields["body"] = clean_text(fields["body"])
         fields["word_count"] = cjk_len(fields["body"])
     fields["updated_at"] = now()
     cols = ",".join(f"{k}=?" for k in fields)
