@@ -193,6 +193,14 @@ details.t-more .t-meta{margin-bottom:0}
     <button class="fbtn active" data-f="" onclick="setFilter(this)">全部</button>
     <button class="fbtn" data-f="new" onclick="setFilter(this)">未用</button>
     <button class="fbtn" data-f="used" onclick="setFilter(this)">已用</button>
+    <select id="topic-line-filter" onchange="setLineFilter(this.value)" title="按风格线筛选"
+            style="max-width:130px;padding:6px 8px">
+      <option value="">全部风格</option>
+      <option value="悬疑">无脑爽文</option>
+      <option value="温情">细腻写实</option>
+      <option value="纯文">纯真笔触</option>
+      <option value="二创">二创改编</option>
+    </select>
     <span style="flex:1"></span>
     <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
     <button id="btn-selall" onclick="selectAllTopics()" title="勾选当前列表里的全部选题">全选</button>
@@ -427,6 +435,7 @@ async function poll(tid, onStage) {
 /* ---------- 选题库 ---------- */
 const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '细腻写实', '纯文': '纯真笔触', '二创': '二创改编'};
 let topicFilter = '';
+let topicLineFilter = '';
 const topicSel = new Set();
 let curTopicIds = [];
 
@@ -485,9 +494,16 @@ function setFilter(btn) {
   document.querySelectorAll('.fbtn').forEach(b => b.classList.toggle('active', b === btn));
   loadTopics();
 }
+function setLineFilter(v) {
+  topicLineFilter = v;
+  loadTopics();
+}
 const SRC = {combo: ['随机', ''], hot: ['热点', 'src-hot'], manual: ['手动', 'src-manual']};
 async function loadTopics() {
-  const ts = await api('/api/topics' + (topicFilter ? '?status=' + topicFilter : ''));
+  const qs = [];
+  if (topicFilter) qs.push('status=' + topicFilter);
+  if (topicLineFilter) qs.push('line=' + encodeURIComponent(topicLineFilter));
+  const ts = await api('/api/topics' + (qs.length ? '?' + qs.join('&') : ''));
   curTopicIds = ts.map(t => t.id);
   $('#topics-list').innerHTML = ts.length ? ts.map(t => {
     const src = SRC[t.source || 'combo'] || SRC.combo;

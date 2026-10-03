@@ -101,8 +101,8 @@ def list_models(b: ModelsIn):
 
 # ---------- 选题 ----------
 @app.get("/api/topics")
-def get_topics(status: Optional[str] = None):
-    return db.list_topics(status)
+def get_topics(status: Optional[str] = None, line: Optional[str] = None):
+    return db.list_topics(status, line)
 
 
 @app.post("/api/topics/generate")

@@ -185,7 +185,7 @@ def delete_topic(tid):
         c.execute("DELETE FROM topics WHERE id=?", (tid,))
 
 
-def list_topics(status=None):
+def list_topics(status=None, line=None):
     q = "SELECT * FROM topics"
     args = ()
     if status:
@@ -195,6 +195,8 @@ def list_topics(status=None):
         out = []
         for r in rows:
             d = json.loads(r["data_json"])
+            if line and d.get("line") != line:
+                continue
             d["id"] = r["id"]
             d["status"] = r["status"]
             d["used_count"] = r["used_count"] if "used_count" in r.keys() else 0
