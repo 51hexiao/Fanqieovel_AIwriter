@@ -228,13 +228,16 @@ ok24 = (len(_calls2) == 2 and isinstance(dataC, dict) and dataC["logic_score"] =
         and any("缺少字段" in str(m.get("content", "")) for m in _calls2[1]))
 print("24) 审稿JSON缺字段自动重试:", ok24)
 
-# 25) 质量环：意见最高优先级 + 一轮通过自动入库
+# 25) 质量环：意见最高优先级 + 一轮通过自动入库（含事实核对两道QC）
 import json as _json
 sid25 = db.create_story(topic, outline)
 db.update_story(sid25, body=body)
 _calls25 = []
 rev1 = '{"logic_score": 70, "hook_score": 65, "ai_risk": 30, "issues": [{"type": "底牌", "detail": "无铺垫", "where": "60%处"}]}'
-_script25 = [rev1, '{"facts": [{"fact": "操盘年限", "value": "七年", "where": "第一节"}]}'] + ["改后第" + m + "节正文" for m in ["一", "二", "三", "四", "五"]] + [
+facts25 = '{"facts": [{"item": "操盘年限", "value": "七年", "first_seen": "第1节", "source_span": "入市七年", "known_by": ["叙述者"], "used_at": ["第4节"]}]}'
+logic25 = '{"issues": [], "uncertain": ["载重与车数关系建议人工复核"]}'
+_script25 = [rev1, facts25, logic25,
+             '{"facts": [{"fact": "操盘年限", "value": "七年", "where": "第一节"}]}'] + ["改后第" + m + "节正文" for m in ["一", "二", "三", "四", "五"]] + [
     '{"note_done": true, "problems": [{"where": "第二节", "detail": "过渡略生硬", "severity": "minor"}]}',
     '{"logic_score": 90, "hook_score": 75, "ai_risk": 15, "issues": []}']
 def _fake25(messages, **kw):
@@ -246,12 +249,15 @@ try:
     rep25 = generator.quality_loop(sid25, "把结尾改成开放式", log=lambda x: None)
 finally:
     llm.chat = _orig_chat
-rev_call = _calls25[2][1]["content"]
-ok25 = (len(_calls25) == 9
+rev_call = _calls25[4][1]["content"]
+ok25 = (len(_calls25) == 11
         and rep25["audits"][0]["hard"] == 0
         and "把结尾改成开放式" in rev_call
         and rev_call.index("把结尾改成开放式") < rev_call.index("AI审稿问题清单")
+        and "操盘年限" in _calls25[2][1]["content"]
         and rep25["verdict"] == "通过" and rep25["rounds"] == 1
+        and rep25["fact_qc"]["skipped"] is False
+        and rep25["fact_qc"]["uncertain"]
         and db.get_story(sid25)["status"] == "approved"
         and db.get_story(sid25)["note"] == "把结尾改成开放式"
         and "改后第五节正文" in db.get_story(sid25)["body"])
@@ -266,7 +272,9 @@ db.update_story(sid26, body=body,
                                         ensure_ascii=False))
 _calls26 = []
 fail_audit = '{"note_done": false, "problems": [{"where": "结尾", "detail": "意见未落实", "severity": "block"}]}'
-_script26 = (['{"facts": [{"fact": "操盘年限", "value": "七年", "where": "第一节"}]}'] + ["重写文本A"] * 5 + [fail_audit]
+_script26 = ([facts25, logic25,
+              '{"facts": [{"fact": "操盘年限", "value": "七年", "where": "第一节"}]}']
+             + ["重写文本A"] * 5 + [fail_audit]
              + ["重写文本B"] * 5 + [fail_audit]
              + ['{"logic_score": 60, "hook_score": 40, "ai_risk": 50, "issues": []}'])
 def _fake26(messages, **kw):
@@ -277,7 +285,7 @@ try:
     rep26 = generator.quality_loop(sid26, "压缩节奏", log=lambda x: None)
 finally:
     llm.chat = _orig_chat
-ok26 = (len(_calls26) == 14
+ok26 = (len(_calls26) == 16
         and rep26["verdict"] == "未过" and rep26["rounds"] == 2
         and len(rep26["audits"]) == 2
         and any("意见未落实" in r for r in rep26["reasons"])
@@ -456,3 +464,144 @@ ok32 &= (len(chunks32) == 2 and chunks32[0][0] == "一"
     and chunks32[1][0] == "二" and chunks32[1][1] == "丙")
 db.delete_story(sid32)
 print("32) 正文单换行格式:", ok32)
+
+# 33) 事实核对QC：抽取→确定性交叉→逻辑审读，只报 issue 不改稿
+import qc as _qc
+ok33 = (_qc.parse_num("八万") == 80000 and _qc.parse_num("三万") == 30000
+        and _qc.parse_num("3万") == 30000 and _qc.parse_num("一千五百") == 1500
+        and _qc.parse_num("1,500") == 1500 and _qc.parse_num("26") == 26
+        and _qc.parse_num("三千石") == 3000 and _qc.parse_num("7年") == 7
+        and _qc.parse_num("三千五") == 3500 and _qc.parse_num("一百零五") == 105
+        and _qc.parse_num("90人") == 90 and _qc.parse_num("百分之三十") == 30
+        and _qc.parse_num("十几人") is None and _qc.parse_num("三十多万") is None
+        and _qc.parse_num("他笑了笑") is None and _qc.parse_num("") is None)
+_f33 = [
+    {"item": "遇难人数", "value": "三万人", "first_seen": "第1节",
+     "source_span": "三万人遇难", "known_by": ["叙述者"], "used_at": []},
+    {"item": "遇难人数", "value": "八万人", "first_seen": "第1节",
+     "source_span": "八万人失踪", "known_by": ["叙述者"], "used_at": []},
+    {"item": "密信", "value": "一封", "first_seen": "第2节",
+     "source_span": "抽屉里的密信", "known_by": ["林秋"], "used_at": ["第1节"]},
+]
+_issues33 = _qc.cross_check_facts(_f33)
+ok33 &= (len(_issues33) == 2
+         and "遇难人数" in _issues33[0] and "数值冲突" in _issues33[0]
+         and "密信" in _issues33[1] and "信息穿越" in _issues33[1])
+fm33 = prompts.fact_messages("核对", "正文")
+lm33 = prompts.logic_review_messages("核对", "正文", "- 密信=一封")
+ok33 &= (fm33[0]["content"] == prompts.SYS_FACT
+         and "first_seen" in fm33[1]["content"]
+         and "known_by" in fm33[1]["content"]
+         and "used_at" in fm33[1]["content"]
+         and lm33[0]["content"] == prompts.SYS_LOGIC
+         and "数量级" in lm33[0]["content"]
+         and "uncertain" in lm33[1]["content"])
+_facts33 = _json.dumps({"facts": [
+    {"item": "遇难人数", "value": "三万人", "first_seen": "第1节",
+     "source_span": "三万人", "known_by": ["叙述者"], "used_at": []},
+    {"item": "遇难人数", "value": "八万人", "first_seen": "第1节",
+     "source_span": "八万人", "known_by": ["叙述者"], "used_at": []}]},
+    ensure_ascii=False)
+_logic33 = _json.dumps({"issues": [{"type": "数量级", "detail": "车数与总量对不上",
+                                    "where": "第3节"}],
+                        "uncertain": ["载重参数拿不准"]}, ensure_ascii=False)
+_script33 = [_facts33, _logic33]
+_calls33 = []
+def _fake33(messages, **kw):
+    _calls33.append(list(messages))
+    return _script33[len(_calls33) - 1]
+llm.chat = _fake33
+try:
+    fq33 = generator.fact_qc_story({"title": "核对", "body": "正文"},
+                                   log=lambda x: None)
+finally:
+    llm.chat = _orig_chat
+ok33 &= (fq33["skipped"] is False
+         and len(fq33["issues"]) == 2
+         and fq33["issues"][0]["type"] == "事实"
+         and "数值冲突" in fq33["issues"][0]["detail"]
+         and fq33["issues"][1]["type"] == "数量级"
+         and fq33["uncertain"] == ["载重参数拿不准"]
+         and len(_calls33) == 2
+         and "遇难人数" in _calls33[1][1]["content"])
+llm.chat = lambda m, **kw: "这不是JSON"
+try:
+    fq33b = generator.fact_qc_story({"title": "核对", "body": "正文"},
+                                    log=lambda x: None)
+finally:
+    llm.chat = _orig_chat
+ok33 &= (fq33b.get("skipped") is True
+         and fq33b["issues"] == [] and fq33b["uncertain"] == [])
+print("33) 事实核对QC（抽取→交叉→逻辑，只报不改）:", ok33)
+
+# 34) 二创双模式 + 调味包 + 胜利成本：大纲/分节/审稿全链路注入（只定规则，不改稿）
+import random as _rand
+c34 = pools.sample_fan_combo(_rand.Random(11))
+ok34 = c34["mode"] in ("gap", "butterfly")
+ok34 &= generator._combo_text(c34).count("模式「") == 1
+rng34 = _rand.Random(3)
+rng34.random = lambda: 0.0
+ok34 &= (pools.maybe_flavor(rng34, "悬疑") == "烟火落点"
+         and pools.maybe_flavor(rng34, "严谨") == "烟火余味"
+         and pools.maybe_flavor(rng34, "二创") == "严谨工程流"
+         and pools.maybe_flavor(rng34, "温情") is None)
+u34g = prompts.outline_messages(
+    {"title": "t", "hook": "h", "line": "二创", "mode": "gap"})[1]["content"]
+u34b = prompts.outline_messages(
+    {"title": "t", "hook": "h", "line": "二创", "mode": "butterfly"})[1]["content"]
+u34s = prompts.outline_messages(
+    {"title": "t", "hook": "h", "line": "悬疑"})[1]["content"]
+ok34 &= ("补空白模式" in u34g and "结局不变" in u34g
+         and "蝴蝶效应模式" not in u34g
+         and "蝴蝶效应模式" in u34b and "必须有因果" in u34b
+         and "price_paid" in u34s and "永久失去了什么" in u34s
+         and "填 none" in u34s)
+sec34 = prompts.section_messages(
+    {"title": "x", "line": "严谨", "topic": {"line": "严谨", "flavor": "烟火余味"},
+     "outline": {"sections": [], "characters": [], "clues": []}}, 2, 5)
+ok34 &= "调味包·烟火余味" in sec34[1]["content"]
+rev34 = prompts.review_messages("x", "正文", "悬疑",
+                                outline_note="胜利成本（大纲 price_paid）：none，因为……")
+ok34 &= "大纲既定设定" in rev34[1]["content"]
+top34 = prompts.topic_messages([dict(c34)], [], line="二创")
+ok34 &= ("模式「" in top34[1]["content"]
+         and pools.FAN_MODES[c34["mode"]] in top34[1]["content"])
+print("34) 二创双模式+调味包+胜利成本:", ok34)
+
+# 35) 表达倾向变体：每线 A/B 两套、随机抽取、写日志、存库、进分节 system
+ok35 = all(len(pools.VARIANTS[l]) == 2 for l in ("悬疑", "温情", "严谨", "二创"))
+ok35 &= len(pools.VARIANT_BY_NAME) == 8
+r35 = _rand.Random(9)
+ok35 &= {pools.sample_variant(r35, "悬疑")["key"] for _ in range(30)} == {"A", "B"}
+_outline35 = {"sections": [{"no": 1, "beats": ["a"], "hook": "断章"}],
+              "characters": [], "clues": []}
+_calls35 = []
+def _fake35(messages, **kw):
+    _calls35.append(list(messages))
+    u = messages[-1]["content"]
+    if "围绕下面的选题" in u:
+        return _json.dumps(_outline35, ensure_ascii=False)
+    if "爆款标题样本" in u:
+        return '{"titles": [{"text": "变体测试标题", "why": "x"}]}'
+    return "正文。\n摘要：测"
+llm.chat = _fake35
+_logs35 = []
+try:
+    sid35 = generator.start_story({"title": "变体选题", "hook": "h", "line": "严谨"},
+                                  log=_logs35.append)
+finally:
+    llm.chat = _orig_chat
+s35 = db.get_story(sid35)
+sec_calls35 = [c for c in _calls35 if "你正在写" in c[-1]["content"]]
+ok35 &= (s35["variant"] in ("A·档案体", "B·贴身追凶")
+         and any("本篇风格变体" in x for x in _logs35)
+         and len(sec_calls35) == 1
+         and "【本篇表达倾向：" in sec_calls35[0][0]["content"]
+         and any(v["name"] in sec_calls35[0][0]["content"]
+                 for v in pools.VARIANTS["严谨"]))
+nosec35 = prompts.section_messages(
+    {"title": "x", "line": "悬疑", "topic": {"line": "悬疑"},
+     "outline": {"sections": [], "characters": [], "clues": []}}, 1, 5)
+ok35 &= "本篇表达倾向" not in nosec35[0]["content"]
+db.delete_story(sid35)
+print("35) 表达倾向变体 A/B（随机+日志+存库）:", ok35)

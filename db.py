@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
         if "quality_json" not in cols:
             c.execute("ALTER TABLE stories ADD COLUMN quality_json TEXT DEFAULT ''")
+        if "variant" not in cols:
+            c.execute("ALTER TABLE stories ADD COLUMN variant TEXT DEFAULT ''")
         tcols = {r[1] for r in c.execute("PRAGMA table_info(topics)")}
         if "used_count" not in tcols:
             c.execute("ALTER TABLE topics ADD COLUMN used_count INTEGER DEFAULT 0")

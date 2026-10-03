@@ -26,8 +26,10 @@ def _as_list(x):
 
 def _combo_text(c):
     if "base" in c:
+        mode = pools.FAN_MODES.get(c.get("mode"), c.get("mode"))
         return (f"{c['main']}·{c['base']}·{c['ip']} × 身份「{c['role']}」"
-                f" × 反差「{c['twist']}」 × 情怀「{c['emo']}」")
+                f" × 反差「{c['twist']}」 × 情怀「{c['emo']}」"
+                f" × 模式「{mode}」")
     if "stake" in c:
         return (f"{c['main']}·{c['plot']}·{c['bg']}·{c['emo']}"
                 f" × 谜面「{c['riddle']}」 × 破局「{c['gimmick']}」"
@@ -72,6 +74,12 @@ def _gen_line_topics(n, log, line):
         t = t if isinstance(t, dict) else {}
         t["combo"] = _combo_text(c)
         t["line"] = line
+        if c.get("mode"):
+            t["mode"] = c["mode"]
+        flv = pools.maybe_flavor(rng, line)
+        if flv:
+            t["flavor"] = flv
+            t["combo"] += f" + 调味「{flv}」"
         out.append(t)
     db.save_topics(out, source="combo")
     log(f"已生成 {len(out)} 个{_ln(line)}选题")
@@ -85,6 +93,9 @@ def gen_topics(n=6, log=print, line="悬疑"):
 
 def start_story(topic, log=print):
     line = topic.get("line") or "悬疑"
+    vr = pools.sample_variant(random.SystemRandom(), line)
+    if vr:
+        log(f"本篇风格变体：{vr['key']}（{vr['name']}）")
     openings = [b["opening"] for b in db.bench_examples(line, 3)
                 if b.get("opening")]
     log("设计大纲与人物…")
@@ -109,6 +120,7 @@ def start_story(topic, log=print):
     except Exception as exc:
         log("标题生成失败，沿用选题标题：" + str(exc))
     sid = db.create_story(topic, outline, title=new_title)
+    db.update_story(sid, variant=(f"{vr['key']}·{vr['name']}" if vr else ""))
     total = len(outline.get("sections", [])) or 5
     for i in range(1, total + 1):
         log(f"撰写第 {i}/{total} 节…")
@@ -132,7 +144,10 @@ def review_story(sid, log=print):
     line = story.get("line") or "悬疑"
     log(f"AI审稿中（{_ln(line)}线标准：查时间线/人物/"
         f"{'煽情' if line == '温情' else '逻辑与伏笔' if line == '严谨' else '底牌与节奏'}）…")
-    data = llm.ask_json(prompts.review_messages(story["title"], story["body"], line),
+    price = str((story.get("outline") or {}).get("price_paid") or "").strip()
+    note = f"胜利成本（大纲 price_paid）：{price}" if price else None
+    data = llm.ask_json(prompts.review_messages(story["title"], story["body"], line,
+                                           outline_note=note),
                    temperature=0.3, max_tokens=2000, log=log, need_keys=["logic_score", "hook_score", "ai_risk", "issues"])
     db.update_story(sid, review_json=json.dumps(data, ensure_ascii=False))
     log("审稿完成")
@@ -213,6 +228,61 @@ def ledger_story(story, log=print):
     return chr(10).join(rows)
 
 
+def _fmt_facts(facts):
+    rows = []
+    for f in facts or []:
+        if not isinstance(f, dict) or not f.get("item"):
+            continue
+        row = f"- {f['item']}={f.get('value', '')}"
+        bits = []
+        if f.get("first_seen"):
+            bits.append(f"首见{f['first_seen']}")
+        if f.get("source_span"):
+            bits.append(f"原文：{f['source_span']}")
+        kb = f.get("known_by") or []
+        if kb:
+            bits.append("知道：" + "、".join(str(x) for x in kb))
+        ua = f.get("used_at") or []
+        if ua:
+            bits.append("用于：" + "、".join(str(x) for x in ua))
+        if bits:
+            row += "（" + "；".join(bits) + "）"
+        rows.append(row)
+    return "\n".join(rows)
+
+
+def fact_qc_story(story, log=print):
+    """事实核对三连：抽取结构化事实 → 确定性交叉检查 → 逻辑审读（因果/数量级/
+    常识/视角）。铁律：只报 issue，不改稿；修改一律交给 revise。"""
+    out = {"issues": [], "uncertain": [], "skipped": False}
+    try:
+        log("抽取事实清单…")
+        data = llm.ask_json(prompts.fact_messages(story["title"], story["body"]),
+                            temperature=0.1, max_tokens=2500, log=log,
+                            need_keys=["facts"])
+        facts = [f for f in (data.get("facts") or [])
+                 if isinstance(f, dict) and f.get("item")]
+    except Exception as exc:
+        log("事实抽取失败，跳过事实核对：" + str(exc))
+        out["skipped"] = True
+        return out
+    for d in qcmod.cross_check_facts(facts):
+        out["issues"].append({"type": "事实", "detail": d, "where": ""})
+    facts_block = _fmt_facts(facts)
+    try:
+        log("逻辑审读（因果/数量级/常识/视角）…")
+        lg = llm.ask_json(
+            prompts.logic_review_messages(story["title"], story["body"], facts_block),
+            temperature=0.2, max_tokens=1500, log=log, need_keys=["issues"])
+        out["issues"] += [i for i in (lg.get("issues") or [])
+                          if isinstance(i, dict)]
+        out["uncertain"] = [u for u in (lg.get("uncertain") or [])
+                            if isinstance(u, str)]
+    except Exception as exc:
+        log("逻辑审读失败，跳过：" + str(exc))
+    return out
+
+
 def audit_story(sid, note, ledger=None, log=print):
     story = db.get_story(sid)
     line = story.get("line") or "悬疑"
@@ -249,6 +319,9 @@ def quality_loop(sid, note, log=print):
         log("尚无AI审稿报告，先审一轮作为改稿依据…")
         rev = review_story(sid, log)
     review_issues = rev.get("issues", []) if isinstance(rev, dict) else []
+
+    fact_qc = fact_qc_story(story, log)
+    review_issues = list(review_issues) + fact_qc["issues"]
 
     log("提取全书事实账本…")
     ledger = ledger_story(story, log)
@@ -292,6 +365,9 @@ def quality_loop(sid, note, log=print):
     verdict = "通过" if passed and not reasons else "未过"
     report = {"note": note, "rounds": rounds, "audits": audits,
               "ledger": ledger,
+              "fact_qc": {"issues": fact_qc["issues"],
+                          "uncertain": fact_qc["uncertain"],
+                          "skipped": fact_qc["skipped"]},
               "final": final, "qc_score": qc2["score"],
               "verdict": verdict, "reasons": reasons}
     db.update_story(sid, quality_json=json.dumps(report, ensure_ascii=False))

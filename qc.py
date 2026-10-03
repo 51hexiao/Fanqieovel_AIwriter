@@ -82,3 +82,99 @@ def local_qc(story):
     return {"score": score, "word_count": wc,
             "para_one_ratio": round(ratio, 2),
             "issues": issues}
+
+
+# ---------- 事实清单确定性交叉检查（只报不改，不改稿不重写） ----------
+_CN_DIGIT = {"零": 0, "一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+             "六": 6, "七": 7, "八": 8, "九": 9}
+_CN_UNIT = {"十": 10, "百": 100, "千": 1000}
+_CN_BIG = {"万": 10000, "亿": 100000000}
+_VAGUE_CHARS = set("几多约近余")
+
+
+def parse_num(text):
+    """把 '八万' / '3千' / '1,500' / '三万五千' / '三万人' / '90人' 解析成数值。
+    带计量后缀（人/车/石/年…）时取前段数词；模糊量（十几/三十多/约）返回 None。"""
+    t = str(text or "").strip().replace("两", "二").replace(",", "").replace("，", "")
+    if t.startswith("百分之"):
+        t = t[3:]
+    if not t or (_VAGUE_CHARS & set(t)):
+        return None
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([万亿])", t)
+    if m:
+        v = float(m.group(1)) * _CN_BIG[m.group(2)]
+        return int(v) if v == int(v) else v
+    if re.fullmatch(r"\d+(?:\.\d+)?", t):
+        f = float(t)
+        return int(f) if f == int(f) else f
+    total = section = digit = 0
+    last_unit = 0
+    saw_zero = False
+    seen = False
+    for ch in t:
+        if ch in _CN_DIGIT:
+            digit = _CN_DIGIT[ch]
+            saw_zero = saw_zero or digit == 0
+            seen = True
+        elif ch.isdigit():
+            digit = digit * 10 + int(ch)
+            seen = True
+        elif ch in _CN_UNIT:
+            section += (digit or 1) * _CN_UNIT[ch]
+            digit = 0
+            last_unit = _CN_UNIT[ch]
+            seen = True
+        elif ch in _CN_BIG:
+            total += ((section + digit) or 1) * _CN_BIG[ch]
+            section = digit = 0
+            last_unit = 0
+            saw_zero = False
+            seen = True
+        elif seen:
+            break
+        else:
+            return None
+    if section and digit and last_unit >= 10 and not saw_zero:
+        section += digit * (last_unit // 10)
+        digit = 0
+    return (total + section + digit) if seen else None
+
+
+def _sec_no(s):
+    m = re.search(r"第\s*(\d+)\s*节", str(s or ""))
+    if m:
+        return int(m.group(1))
+    s = str(s or "")
+    if "开篇" in s or "序" in s:
+        return 0
+    return None
+
+
+def cross_check_facts(facts):
+    """对事实清单做确定性交叉检查：同名事实数值冲突、事实被使用先于出现。
+    返回问题字符串列表；只报 issue，修改交给 revise。"""
+    issues = []
+    by_item = {}
+    for f in facts or []:
+        if isinstance(f, dict) and f.get("item"):
+            by_item.setdefault(str(f["item"]).strip(), []).append(f)
+    for item, fs in by_item.items():
+        vals = [(str(f.get("value") or ""), parse_num(f.get("value")),
+                 f.get("first_seen") or "?") for f in fs]
+        nums = {n for _, n, _ in vals if n is not None}
+        if len(nums) > 1:
+            detail = "；".join(f"{v}（{w}）" for v, _, w in vals if v)
+            issues.append(f"事实「{item}」数值冲突：{detail}")
+    for f in facts or []:
+        if not isinstance(f, dict) or not f.get("item"):
+            continue
+        first = _sec_no(f.get("first_seen"))
+        if first is None:
+            continue
+        for u in (f.get("used_at") or []):
+            use = _sec_no(u)
+            if use is not None and use < first:
+                issues.append(f"事实「{f['item']}」首次出现于第{first}节，"
+                              f"但第{use}节已被人物使用（信息穿越）")
+                break
+    return issues
