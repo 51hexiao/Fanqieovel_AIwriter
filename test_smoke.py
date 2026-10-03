@@ -282,3 +282,12 @@ ok26 = (len(_calls26) == 14
         and any("意见未落实" in r for r in rep26["reasons"])
         and db.get_story(sid26)["status"] == "rejected")
 print("26) 质量环两轮不过自动废弃:", ok26)
+
+# 27) 选题可重复写稿：used_count 递增、无“已使用”门禁（无Key任务报错不影响计数）
+tid27 = db.add_topic("可重复选题测试", "钩子", line="悬疑")
+c.post(f"/api/topics/{tid27}/write")
+c.post(f"/api/topics/{tid27}/write")
+time.sleep(1.0)  # 等后台任务自行失败（无Key），计数在启动前已完成
+rows27 = {t["id"]: t for t in c.get("/api/topics").json()}
+ok27 = (rows27[tid27]["used_count"] == 2 and rows27[tid27]["status"] == "used")
+print("27) 选题重复使用+计数:", ok27)

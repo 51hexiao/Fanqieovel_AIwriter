@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS stories(
 );
 CREATE TABLE IF NOT EXISTS topics(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  data_json TEXT, status TEXT DEFAULT 'new', created_at TEXT
+  data_json TEXT, status TEXT DEFAULT 'new',
+  used_count INTEGER DEFAULT 0, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS used_names(name TEXT PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS bench(
@@ -62,8 +63,14 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
         if "line" not in cols:  # 旧库迁移
             c.execute("ALTER TABLE stories ADD COLUMN line TEXT DEFAULT '悬疑'")
+        cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
+        cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
         if "quality_json" not in cols:
             c.execute("ALTER TABLE stories ADD COLUMN quality_json TEXT DEFAULT ''")
+        tcols = {r[1] for r in c.execute("PRAGMA table_info(topics)")}
+        if "used_count" not in tcols:
+            c.execute("ALTER TABLE topics ADD COLUMN used_count INTEGER DEFAULT 0")
+            c.execute("UPDATE topics SET used_count = 1 WHERE status = 'used'")
 
 
 def cjk_len(s):
@@ -182,13 +189,14 @@ def list_topics(status=None):
             d = json.loads(r["data_json"])
             d["id"] = r["id"]
             d["status"] = r["status"]
+            d["used_count"] = r["used_count"] if "used_count" in r.keys() else 0
             out.append(d)
         return out
 
 
 def use_topic(tid):
     with _lock, _conn() as c:
-        c.execute("UPDATE topics SET status='used' WHERE id=?", (tid,))
+        c.execute("UPDATE topics SET status='used', used_count=used_count+1 WHERE id=?", (tid,))
 
 
 def recent_topics(n=30):

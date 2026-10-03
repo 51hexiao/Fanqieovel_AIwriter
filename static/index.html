@@ -48,6 +48,10 @@ button.mini{padding:3px 10px;font-size:12px}
 .card:hover{border-color:rgba(47,107,222,.45);box-shadow:0 6px 18px rgba(15,23,42,.09);transform:translateY(-2px)}
 .t-del{position:absolute;top:10px;right:10px;border:none;background:none;color:var(--dim);font-size:14px;padding:2px 6px;box-shadow:none}
 .t-del:hover{color:var(--red)}
+.t-pick{position:absolute;top:12px;left:10px;width:15px;height:15px;cursor:pointer;accent-color:var(--acc)}
+.card.selected{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+.src-used{color:var(--muted);background:rgba(100,116,139,.14)}
+.card .t-title{padding-left:22px}
 .t-src{font-size:11px;padding:1px 8px;border-radius:20px;margin-left:8px;vertical-align:2px;white-space:nowrap}
 .src-hot{color:var(--amber);background:rgba(196,125,16,.1)}
 .src-manual{color:var(--cyan);background:rgba(14,138,168,.1)}
@@ -175,6 +179,10 @@ details.t-more .t-meta{margin-bottom:0}
     <button class="fbtn active" data-f="" onclick="setFilter(this)">全部</button>
     <button class="fbtn" data-f="new" onclick="setFilter(this)">未用</button>
     <button class="fbtn" data-f="used" onclick="setFilter(this)">已用</button>
+    <span style="flex:1"></span>
+    <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
+    <button onclick="batchWrite()" title="按勾选顺序，一篇写完再写下一篇">✍ 批量写稿</button>
+    <button onclick="batchDelete()">🗑 批量删除</button>
   </div>
   <div class="cards" id="topics-list"></div>
 </section>
@@ -372,6 +380,45 @@ async function poll(tid, onStage) {
 /* ---------- 选题库 ---------- */
 const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '细腻写实'};
 let topicFilter = '';
+const topicSel = new Set();
+
+function pickTopic(id, on, el) {
+  if (on) topicSel.add(id); else topicSel.delete(id);
+  if (el && el.closest) el.closest('.card').classList.toggle('selected', !!on);
+  updateSelBar();
+}
+function updateSelBar() {
+  const el = $('#sel-n');
+  if (el) el.textContent = topicSel.size;
+}
+async function batchWrite() {
+  if (!topicSel.size) { alert('先勾选要写的选题（卡片左上角方框）'); return; }
+  const ids = [...topicSel];
+  const st = $('#topics-status');
+  for (let i = 0; i < ids.length; i++) {
+    busy(st, `批量写稿 ${i + 1}/${ids.length}：选题 #${ids[i]} 生成中…`);
+    try {
+      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST'});
+      await poll(task_id, s => busy(st, `批量写稿 ${i + 1}/${ids.length}：${s}`));
+    } catch (e) {
+      idle(st, '✗ 选题 #' + ids[i] + ' 写稿失败：' + e.message, 'err');
+      loadTopics();
+      return;
+    }
+  }
+  idle(st, `✓ 批量写稿完成，共 ${ids.length} 篇，已放入稿件库`, 'ok');
+  topicSel.clear();
+  loadTopics();
+}
+async function batchDelete() {
+  if (!topicSel.size) return;
+  if (!confirm('确认删除选中的 ' + topicSel.size + ' 条选题？')) return;
+  for (const id of topicSel) {
+    try { await api('/api/topics/' + id, {method: 'DELETE'}); } catch (e) {}
+  }
+  topicSel.clear();
+  loadTopics();
+}
 let curLine = '悬疑';
 function setLine(btn) {
   curLine = btn.dataset.line;
@@ -391,17 +438,19 @@ async function loadTopics() {
       ? `<div class="t-hotline">🔥 热点 · <b>${esc(t.hot)}</b></div>` : '';
     const combo = t.combo ? `<div class="t-combo" title="${esc(t.combo)}">${esc(t.combo)}</div>` : '';
     return `
-    <div class="card">
+    <div class="card${topicSel.has(t.id) ? ' selected' : ''}">
+      <input type="checkbox" class="t-pick" title="多选" ${topicSel.has(t.id) ? 'checked' : ''} onchange="pickTopic(${t.id}, this.checked, this)">
       <button class="t-del" title="删除这条选题" onclick="delTopic(${t.id})">✕</button>
-      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line === '温情' ? '<span class="t-src src-warm">细腻写实</span>' : ''}</div>
+      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line === '温情' ? '<span class="t-src src-warm">细腻写实</span>' : ''}${t.used_count ? `<span class="t-src src-used">已用${t.used_count}次</span>` : ''}</div>
       ${tag}${combo}
       <div class="t-hook" title="${esc(t.hook || '')}">${esc(t.hook || '')}</div>
       <details class="t-more"><summary>议题与差异</summary>
         <div class="t-meta">议题 · ${esc(t.social || '-')}<br>差异 · ${esc(t.diff || '-')}</div>
       </details>
-      <button ${t.status !== 'new' ? 'disabled' : 'class="primary"'} onclick="writeTopic(${t.id})">${t.status === 'new' ? '就写这篇' : '已使用'}</button>
+      <button class="primary" onclick="writeTopic(${t.id})">${t.used_count ? '再写一篇' : '就写这篇'}</button>
     </div>`;
   }).join('') : '<p class="hint">选题库是空的——随机生成，或在上方输入框录自己的点子</p>';
+  updateSelBar();
 }
 function _topicTask(url, busyMsg, doneMsg) {
   const st = $('#topics-status');
@@ -426,6 +475,7 @@ async function addManualTopic() {
   } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
 }
 async function delTopic(id) {
+  topicSel.delete(id); updateSelBar();
   if (!confirm('删除这条选题？')) return;
   await api('/api/topics/' + id, {method: 'DELETE'});
   loadTopics();
