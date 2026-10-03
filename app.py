@@ -115,6 +115,8 @@ def gen_topics(payload: Optional[dict] = None):
 class TopicIn(BaseModel):
     title: str
     hook: str = ""
+    social: str = ""
+    diff: str = ""
     line: str = "悬疑"
 
 
@@ -123,7 +125,9 @@ def add_topic(b: TopicIn):
     if not b.title.strip():
         raise HTTPException(400, "选题内容不能为空")
     return {"ok": True,
-            "id": db.add_topic(b.title.strip(), b.hook.strip(), line=b.line)}
+            "id": db.add_topic(b.title.strip(), b.hook.strip(),
+                               social=b.social.strip(), diff=b.diff.strip(),
+                               line=b.line)}
 
 
 @app.delete("/api/topics/{tid}")

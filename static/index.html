@@ -123,6 +123,12 @@ code{color:var(--cyan);background:rgba(14,138,168,.08);padding:1px 6px;border-ra
 
 .field{margin-bottom:13px}
 .field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:6px}
+.modal-mask{position:fixed;inset:0;background:rgba(36,48,63,.42);display:flex;align-items:center;justify-content:center;z-index:99}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 22px 16px;width:560px;max-width:92vw;box-shadow:0 12px 40px rgba(36,48,63,.2)}
+.modal h3{margin:0 0 14px;font-size:15px}
+.modal .row2{display:flex;gap:12px}
+.modal .row2 .field{flex:1}
+.modal .bar{justify-content:flex-end;align-items:center}
 .row{display:flex;gap:12px}.row>*{flex:1}
 .card-box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
 .sec-title{color:var(--text);font-size:14px;font-weight:600;margin-bottom:16px}
@@ -180,8 +186,7 @@ details.t-more .t-meta{margin-bottom:0}
     <span class="status" id="topics-status"></span>
   </div>
   <div class="bar" style="align-items:center">
-    <input type="text" id="manual-topic" placeholder="自己想到的点子，直接录入选题库（回车保存）" style="max-width:430px" onkeydown="if(event.key==='Enter')addManualTopic()">
-    <button onclick="addManualTopic()">录入</button>
+    <button class="primary" onclick="openTopicModal()">＋ 手动录入选题</button>
     <span style="flex:1"></span>
     <span class="hint" style="margin-right:-4px">只看</span>
     <button class="fbtn active" data-f="" onclick="setFilter(this)">全部</button>
@@ -194,6 +199,33 @@ details.t-more .t-meta{margin-bottom:0}
     <button onclick="batchDelete()">🗑 批量删除</button>
   </div>
   <div class="cards" id="topics-list"></div>
+  <div class="modal-mask" id="topic-modal" hidden onclick="if(event.target===this)closeTopicModal()">
+    <div class="modal">
+      <h3>手动录入选题</h3>
+      <div class="field"><label>标题（≤30字，必填）——建议两段式：前半给处境，后半给反转</label>
+        <input type="text" id="mt-title" maxlength="40" placeholder="例：穿成庙里小沙弥，我扒了法海的收妖流水账"></div>
+      <div class="row2">
+        <div class="field"><label>风格线</label>
+          <select id="mt-line">
+            <option value="悬疑">无脑爽文</option>
+            <option value="温情">细腻写实</option>
+            <option value="纯文">纯真笔触</option>
+            <option value="二创">二创改编</option>
+          </select></div>
+        <div class="field"><label>议题（社会话题 / 情绪共鸣点，选填）</label>
+          <input type="text" id="mt-social" placeholder="例：重男轻女 · 独居安全"></div>
+      </div>
+      <div class="field"><label>开头钩子（一句话，让人想点进来，选填）</label>
+        <textarea id="mt-hook" rows="2" placeholder="例：民警十年亲手放走真凶的那晚，他笑了"></textarea></div>
+      <div class="field"><label>差异（与同类故事的不同，选填）</label>
+        <input type="text" id="mt-diff" placeholder="例：凶手主动报案 · 守规矩的人才是凶手"></div>
+      <div class="bar">
+        <span class="status" id="mt-status"></span>
+        <button onclick="closeTopicModal()">取消</button>
+        <button class="primary" onclick="submitTopicModal()">录入选题库</button>
+      </div>
+    </div>
+  </div>
 </section>
 
 <section id="tab-stories" hidden>
@@ -487,16 +519,29 @@ function _topicTask(url, busyMsg, doneMsg) {
 async function genTopics() {
   _topicTask('/api/topics/generate', '随机生成选题中…', '✓ 完成，已放入选题库');
 }
-async function addManualTopic() {
-  const v = $('#manual-topic').value.trim();
-  if (!v) return;
-  const st = $('#topics-status');
+function openTopicModal() {
+  $('#topic-modal').hidden = false;
+  $('#mt-title').value = ''; $('#mt-hook').value = '';
+  $('#mt-social').value = ''; $('#mt-diff').value = '';
+  $('#mt-line').value = curLine;
+  $('#mt-status').textContent = '';
+  setTimeout(() => $('#mt-title').focus(), 60);
+}
+function closeTopicModal() { $('#topic-modal').hidden = true; }
+async function submitTopicModal() {
+  const title = $('#mt-title').value.trim();
+  const st = $('#mt-status');
+  if (!title) { st.textContent = '标题必填'; return; }
   try {
-    await api('/api/topics', {method: 'POST', body: JSON.stringify({title: v, line: curLine})});
-    $('#manual-topic').value = '';
-    idle(st, '✓ 已录入选题库', 'ok');
+    await api('/api/topics', {method: 'POST', body: JSON.stringify({
+      title, line: $('#mt-line').value,
+      hook: $('#mt-hook').value.trim(),
+      social: $('#mt-social').value.trim(),
+      diff: $('#mt-diff').value.trim()})});
+    closeTopicModal();
+    idle($('#topics-status'), '✓ 已录入选题库', 'ok');
     loadTopics();
-  } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
+  } catch (e) { st.textContent = '✗ ' + e.message; }
 }
 async function delTopic(id) {
   topicSel.delete(id); updateSelBar();

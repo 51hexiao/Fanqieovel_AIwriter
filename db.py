@@ -171,9 +171,9 @@ def save_topics(items, source="combo"):
                       (json.dumps(t, ensure_ascii=False), now()))
 
 
-def add_topic(title, hook="", social="", hot="", line="悬疑"):
+def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):
     t = {"title": title, "hook": hook, "social": social, "hot": hot,
-         "diff": "", "combo": "", "source": "manual", "line": line}
+         "diff": diff, "combo": "", "source": "manual", "line": line}
     with _lock, _conn() as c:
         cur = c.execute("INSERT INTO topics(data_json,created_at) VALUES(?,?)",
                         (json.dumps(t, ensure_ascii=False), now()))
