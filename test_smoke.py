@@ -613,3 +613,14 @@ ok36 = ("[事实核对]" in usrc and "[待人工确认]" in usrc
         and "FAN_MODE" in usrc and "调味·" in usrc
         and ".src-flavor{" in usrc)
 print("36) 新功能界面可见:", ok36)
+
+# 37) 稿件页改版：两栏布局 + 筛选/快捷操作 + 按状态收敛按钮 + 空稿清理
+ok37 = ('.s-wrap{display:grid' in usrc and 'id="story-chips"' in usrc
+        and "S_FILTERS" in usrc and "'pending'" in usrc
+        and "renderEditorActions" in usrc and "cleanupEmpty" in usrc
+        and "quickPublish" in usrc and "ed-loop" in usrc
+        and "editor-empty" in usrc
+        and "_pj(s.quality_json)" in usrc and "const _pj" in usrc
+        and "stories-body" not in usrc
+        and "scrollIntoView({behavior: 'smooth'})" not in usrc)
+print("37) 稿件页两栏改版:", ok37)

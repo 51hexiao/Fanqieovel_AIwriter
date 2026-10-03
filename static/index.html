@@ -59,6 +59,17 @@ button.mini{padding:3px 10px;font-size:12px}
 .src-fan{color:#7c3aed;background:rgba(124,58,237,.1)}
 .src-rigor{color:#1e5fa8;background:rgba(30,95,168,.1)}
 .src-flavor{color:#0f766e;background:rgba(13,148,136,.1)}
+.s-wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start}
+.s-side,.s-main{min-width:0}
+.fbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#stories-list{margin-top:10px;max-height:calc(100vh - 250px);overflow:auto;padding-right:2px}
+.s-item{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;cursor:pointer;background:var(--panel)}
+.s-item:hover{border-color:var(--acc)}
+.s-item.sel{border-color:var(--acc);background:var(--acc-dim)}
+.s-item .s-t{font-size:13.5px;font-weight:600;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.s-item .s-m{display:flex;align-items:center;gap:6px;font-size:11.5px;overflow:hidden}
+.s-item .s-m .dim{white-space:nowrap}
+.s-item .s-acts{margin-left:auto;display:flex;gap:4px;white-space:nowrap}
 .t-hotline{font-size:12px;color:var(--muted);margin-bottom:8px}
 .t-hotline b{color:var(--amber);font-weight:600}
 .fbtn.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
@@ -239,50 +250,60 @@ details.t-more .t-meta{margin-bottom:0}
 </section>
 
 <section id="tab-stories" hidden>
-  <div class="crumb">生成 → 质检 → 审核 → 发布</div>
-  <table>
-    <thead><tr><th>ID</th><th>标题</th><th>风格</th><th>字数</th><th>状态</th><th>更新时间</th><th>操作</th></tr></thead>
-    <tbody id="stories-body"></tbody>
-  </table>
-  <div id="editor" hidden>
-    <div class="bar">
-      <b id="ed-id" style="color:var(--cyan)"></b>
-      <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
-      <span class="status" id="ed-status"></span>
-      <span style="flex:1"></span>
-      <button onclick="saveStory()">保存修改</button>
-      <button onclick="rejectStory()">废弃这篇</button>
+  <div class="s-wrap">
+    <div class="s-side">
+      <div class="crumb">生成 → 质检 → 审核 → 发布</div>
+      <div class="fbar" id="story-chips"></div>
+      <div class="bar" style="margin-top:8px;gap:6px">
+        <input type="text" id="story-q" placeholder="搜标题…" style="flex:1;min-width:0" oninput="storySearch(this.value)">
+        <select id="story-line" onchange="storyLineSel(this.value)">
+          <option value="">全部风格</option>
+          <option value="悬疑">爽文</option>
+          <option value="温情">烟火</option>
+          <option value="严谨">写实</option>
+          <option value="二创">二创</option>
+        </select>
+        <button class="mini" id="st-empty-cleanup" hidden onclick="cleanupEmpty()">清空稿</button>
+      </div>
+      <div id="stories-list"></div>
     </div>
-    <div class="bar" style="margin-top:6px">
-      <button onclick="doQC()">本地质检</button>
-      <button onclick="doReview()">AI逻辑审查</button>
-      <button onclick="doPolish()">润色去AI味</button>
-      <button onclick="approve()">✓ 批准入库</button>
-      <button onclick="markPublished()">标记已发布</button>
-      <button class="primary" onclick="doPublish()">打开发布助手</button>
-      <button onclick="doExport()">导出TXT</button>
-    </div>
-    <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
-    <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
-    <div id="qc-report"></div>
-    <div id="review-report"></div>
-    <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="3"></textarea></div>
-    <div class="bar">
-      <button class="primary" onclick="startQuality()">下达意见·启动质量环</button>
-      <span class="hint">改稿→校对→终审全自动，最多两轮；达标自动入库，不达标自动废弃</span>
-    </div>
-    <div id="quality-report"></div>
-    <div id="publish-panel" hidden>
-      <div class="qc-head" style="border-top:none;padding-top:0;margin-top:8px">发布助手</div>
-      <div class="step"><span class="no">01</span>点「自动填入草稿」：自动打开后台 → 新建短故事 → 填入标题和正文 → 存草稿（首次需扫码登录，之后免登录）</div>
-      <div class="step"><span class="no">02</span>在打开的浏览器里设置封面、作品分类等，<b>人工点「下一步」发布</b></div>
-      <div class="step"><span class="no">03</span>发布完成后回这里点「标记已发布」留档</div>
-      <div class="bar" style="margin-top:10px">
-        <button class="primary" onclick="openWriter()">自动填入草稿</button>
-        <button onclick="copyPart('title')">复制标题（备用）</button>
-        <button onclick="copyPart('body')">复制正文（备用）</button>
-        <a id="writer-link" href="#" target="_blank" class="link" style="display:none">手动打开后台 ↗</a>
-        <span class="status" id="pub-status"></span>
+    <div class="s-main">
+      <div id="editor-empty" class="hint" style="padding:48px 0;text-align:center">← 从左侧选一篇稿件开始处理</div>
+      <div id="editor" hidden>
+        <div class="bar">
+          <b id="ed-id" style="color:var(--cyan)"></b>
+          <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
+          <span class="status" id="ed-status"></span>
+          <span style="flex:1"></span>
+          <button onclick="saveStory()">保存修改</button>
+          <button onclick="doExport()">导出TXT</button>
+        </div>
+        <div class="bar" id="ed-actions" style="margin-top:6px"></div>
+        <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
+        <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
+        <div id="qc-report"></div>
+        <div id="review-report"></div>
+        <div id="ed-loop">
+          <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="3"></textarea></div>
+          <div class="bar">
+            <button class="primary" onclick="startQuality()">下达意见·启动质量环</button>
+            <span class="hint">改稿→校对→终审全自动，最多两轮；达标自动入库，不达标自动废弃</span>
+          </div>
+        </div>
+        <div id="quality-report"></div>
+        <div id="publish-panel" hidden>
+          <div class="qc-head" style="border-top:none;padding-top:0;margin-top:8px">发布助手</div>
+          <div class="step"><span class="no">01</span>点「自动填入草稿」：自动打开后台 → 新建短故事 → 填入标题和正文 → 存草稿（首次需扫码登录，之后免登录）</div>
+          <div class="step"><span class="no">02</span>在打开的浏览器里设置封面、作品分类等，<b>人工点「下一步」发布</b></div>
+          <div class="step"><span class="no">03</span>发布完成后回这里点「标记已发布」留档</div>
+          <div class="bar" style="margin-top:10px">
+            <button class="primary" onclick="openWriter()">自动填入草稿</button>
+            <button onclick="copyPart('title')">复制标题（备用）</button>
+            <button onclick="copyPart('body')">复制正文（备用）</button>
+            <a id="writer-link" href="#" target="_blank" class="link" style="display:none">手动打开后台 ↗</a>
+            <span class="status" id="pub-status"></span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -581,21 +602,85 @@ async function writeTopic(id) {
 
 /* ---------- 稿件 ---------- */
 const STATUS = {generating:['生成中','b-generating'], generated:['待审核','b-generated'], approved:['已批准','b-approved'], published:['已发布','b-published'], rejected:['已废弃','b-rejected']};
-async function loadStories() {
-  const ss = await api('/api/stories');
-  $('#sb-stories').textContent = '稿件 ' + ss.length;
-  $('#stories-body').innerHTML = ss.length ? ss.map(s => {
+const S_FILTERS = [['pending','待处理'],['generated','待审核'],['approved','已批准'],['published','已发布'],['rejected','已废弃'],['all','全部']];
+let storyStatus = 'pending', storyLine = '', storyQ = '', allStories = [];
+function setStoryStatus(v) { storyStatus = v; renderStoryChips(); renderStoryList(); }
+function storySearch(v) { storyQ = v.trim(); renderStoryList(); }
+function storyLineSel(v) { storyLine = v; renderStoryList(); }
+function _storyCounts(ss) {
+  const c = {pending: 0, generated: 0, approved: 0, published: 0, rejected: 0, all: ss.length};
+  ss.forEach(s => {
+    if (['generating', 'generated', 'approved'].includes(s.status) && s.word_count) c.pending++;
+    if (s.status in c) c[s.status]++;
+  });
+  return c;
+}
+function renderStoryChips() {
+  const c = _storyCounts(allStories);
+  $('#story-chips').innerHTML = S_FILTERS.map(([k, t]) =>
+    `<button class="fbtn${storyStatus === k ? ' active' : ''}" onclick="setStoryStatus('${k}')">${t}${c[k] ? ' ' + c[k] : ''}</button>`).join('');
+}
+function _matchStory(s) {
+  if (storyStatus === 'pending') {
+    if (!['generating', 'generated', 'approved'].includes(s.status) || !s.word_count) return false;
+  } else if (storyStatus !== 'all' && s.status !== storyStatus) return false;
+  if (storyLine && (s.line || '悬疑') !== storyLine) return false;
+  if (storyQ && !(s.title || '').includes(storyQ)) return false;
+  return true;
+}
+function renderStoryList() {
+  $('#st-empty-cleanup').hidden = !allStories.some(s => !s.word_count && s.status !== 'generating');
+  const ss = allStories.filter(_matchStory);
+  $('#stories-list').innerHTML = ss.length ? ss.map(s => {
     const st = STATUS[s.status] || [s.status, ''];
-    return `<tr>
-      <td class="dim">#${s.id}</td>
-      <td><span class="link" onclick="openStory(${s.id})">${esc(s.title) || '(未命名)'}</span></td>
-      <td>${s.line === '悬疑' ? '<span class="dim">无脑爽文</span>' : `<span class="badge ${s.line === '严谨' ? 'b-rigor' : s.line === '二创' ? 'b-fan' : 'b-warm'}">${LINE_NAMES[s.line] || s.line}</span>`}</td>
-      <td>${s.word_count}</td>
-      <td><span class="badge ${st[1]}">${st[0]}</span></td>
-      <td class="dim">${esc(s.updated_at || '')}</td>
-      <td><button class="mini" onclick="delStory(${s.id})">删除</button></td>
-    </tr>`;
-  }).join('') : '<tr><td colspan="7" class="hint">还没有稿件，去「选题」生成一篇</td></tr>';
+    const lineBadge = s.line === '悬疑' ? '' :
+      `<span class="badge ${s.line === '严谨' ? 'b-rigor' : s.line === '二创' ? 'b-fan' : 'b-warm'}">${LINE_NAMES[s.line] || s.line}</span>`;
+    return `<div class="s-item${s.id === curId ? ' sel' : ''}" data-sid="${s.id}" onclick="openStory(${s.id})">
+      <div class="s-t">${esc(s.title) || '(未命名)'}</div>
+      <div class="s-m"><span class="badge ${st[1]}">${st[0]}</span>${lineBadge}<span class="dim">${s.word_count} 字</span><span class="dim">${esc((s.updated_at || '').slice(5, 16))}</span>
+        <span class="s-acts">
+          ${s.status === 'approved' ? `<button class="mini" title="打开发布助手" onclick="event.stopPropagation();quickPublish(${s.id})">发布</button>` : ''}
+          ${s.word_count ? `<button class="mini" title="导出TXT" onclick="event.stopPropagation();window.open('/api/stories/${s.id}/export')">导出</button>` : ''}
+          <button class="mini" title="删除这篇" onclick="event.stopPropagation();delStory(${s.id})">删</button>
+        </span>
+      </div>
+    </div>`;
+  }).join('') : '<p class="hint" style="padding:12px 4px">这个筛选下没有稿件</p>';
+}
+async function loadStories() {
+  allStories = await api('/api/stories');
+  $('#sb-stories').textContent = '稿件 ' + allStories.length;
+  renderStoryChips();
+  renderStoryList();
+}
+async function quickPublish(id) { await openStory(id); doPublish(); }
+async function cleanupEmpty() {
+  const empties = allStories.filter(s => !s.word_count && s.status !== 'generating');
+  if (!empties.length) return;
+  if (!confirm('删除 ' + empties.length + ' 篇空稿（没有正文的占位稿）？')) return;
+  for (const s of empties) await api('/api/stories/' + s.id, {method: 'DELETE'});
+  if (empties.some(s => s.id === curId)) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; }
+  loadStories();
+}
+function renderEditorActions(s) {
+  const G = {
+    generating: [],
+    generated: [
+      ['doQC()', '本地质检'], ['doReview()', 'AI逻辑审查'], ['doPolish()', '润色去AI味'],
+      ['approve()', '✓ 批准入库'], ['startQuality()', '下达意见·启动质量环', 'primary'],
+      ['rejectStory()', '废弃这篇'],
+    ],
+    approved: [
+      ['doPublish()', '打开发布助手', 'primary'], ['markPublished()', '✓ 标记已发布'],
+      ['startQuality()', '下达意见·启动质量环'], ['rejectStory()', '废弃这篇'],
+    ],
+    published: [['doPublish()', '重新填入草稿']],
+    rejected: [['delStory(curId)', '彻底删除']],
+  };
+  $('#ed-actions').innerHTML = (G[s.status] || []).map(b =>
+    `<button${b[2] ? ` class="${b[2]}"` : ''} onclick="${b[0]}">${b[1]}</button>`).join('');
+  $('#ed-loop').hidden = !['generated', 'approved'].includes(s.status);
+  $('#publish-panel').hidden = true;
 }
 async function startQuality() {
   if (!curId) return;
@@ -612,6 +697,7 @@ async function startQuality() {
 async function rejectStory() {
   if (!confirm('确认废弃这篇？')) return;
   await api(`/api/stories/${curId}/status`, {method: 'POST', body: JSON.stringify({status: 'rejected'})});
+  await openStory(curId);
   idle($('#ed-status'), '✓ 已废弃', 'ok');
   loadStories();
 }
@@ -646,10 +732,13 @@ function renderQuality(q) {
   });
   el.innerHTML = h;
 }
+/* 存量字段可能是旧版本写入的裸文本，解析失败一律按无报告处理，不能让编辑器打不开 */
+const _pj = t => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
 async function openStory(id) {
   curId = id;
   const s = await api('/api/stories/' + id);
   $('#editor').hidden = false;
+  $('#editor-empty').hidden = true;
   $('#ed-id').textContent = '#' + s.id;
   $('#ed-title').value = s.title;
   $('#ed-body').value = s.body;
@@ -657,10 +746,13 @@ async function openStory(id) {
   $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();
   $('#ed-cat').textContent = tMain ? '发布主分类：《' + tMain + '》' : '';
-  renderQC(s.qc_json ? JSON.parse(s.qc_json) : null);
-  renderReview(s.review_json ? JSON.parse(s.review_json) : null);
-  renderQuality(s.quality_json ? JSON.parse(s.quality_json) : null);
-  document.getElementById('editor').scrollIntoView({behavior: 'smooth'});
+  renderEditorActions(s);
+  renderQC(_pj(s.qc_json));
+  renderReview(_pj(s.review_json));
+  renderQuality(_pj(s.quality_json));
+  document.querySelectorAll('.s-item.sel').forEach(e => e.classList.remove('sel'));
+  const el = document.querySelector(`.s-item[data-sid="${id}"]`);
+  if (el) el.classList.add('sel');
 }
 function renderQC(rep) {
   if (!rep) { $('#qc-report').innerHTML = ''; return; }
@@ -715,11 +807,13 @@ async function approve() {
   if (!confirm('确认批准入库？')) return;
   await saveStory();
   await api(`/api/stories/${curId}/approve`, {method: 'POST'});
+  await openStory(curId);
   idle($('#ed-status'), '✓ 已批准入库，人名已登记', 'ok');
   loadStories();
 }
 async function markPublished() {
   await api(`/api/stories/${curId}/status`, {method: 'POST', body: JSON.stringify({status: 'published'})});
+  await openStory(curId);
   idle($('#ed-status'), '✓ 已标记发布', 'ok');
   loadStories();
 }
@@ -756,7 +850,7 @@ function doExport() { window.open(`/api/stories/${curId}/export`); }
 async function delStory(id) {
   if (!confirm('删除稿件 #' + id + '？')) return;
   await api('/api/stories/' + id, {method: 'DELETE'});
-  if (curId === id) { curId = null; $('#editor').hidden = true; }
+  if (curId === id) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; }
   loadStories();
 }
 
