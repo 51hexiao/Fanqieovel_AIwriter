@@ -189,6 +189,7 @@ details.t-more .t-meta{margin-bottom:0}
     <button class="fbtn" data-f="used" onclick="setFilter(this)">已用</button>
     <span style="flex:1"></span>
     <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
+    <button id="btn-selall" onclick="selectAllTopics()" title="勾选当前列表里的全部选题">全选</button>
     <button onclick="batchWrite()" title="按勾选顺序，一篇写完再写下一篇">✍ 批量写稿</button>
     <button onclick="batchDelete()">🗑 批量删除</button>
   </div>
@@ -394,6 +395,7 @@ async function poll(tid, onStage) {
 const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '细腻写实', '纯文': '纯真笔触', '二创': '二创改编'};
 let topicFilter = '';
 const topicSel = new Set();
+let curTopicIds = [];
 
 function pickTopic(id, on, el) {
   if (on) topicSel.add(id); else topicSel.delete(id);
@@ -403,6 +405,14 @@ function pickTopic(id, on, el) {
 function updateSelBar() {
   const el = $('#sel-n');
   if (el) el.textContent = topicSel.size;
+  const b = $('#btn-selall');
+  if (b) b.textContent = (curTopicIds.length && curTopicIds.every(id => topicSel.has(id)))
+    ? '取消全选' : '全选';
+}
+function selectAllTopics() {
+  const all = curTopicIds.length && curTopicIds.every(id => topicSel.has(id));
+  curTopicIds.forEach(id => all ? topicSel.delete(id) : topicSel.add(id));
+  loadTopics();
 }
 async function batchWrite() {
   if (!topicSel.size) { alert('先勾选要写的选题（卡片左上角方框）'); return; }
@@ -445,6 +455,7 @@ function setFilter(btn) {
 const SRC = {combo: ['随机', ''], hot: ['热点', 'src-hot'], manual: ['手动', 'src-manual']};
 async function loadTopics() {
   const ts = await api('/api/topics' + (topicFilter ? '?status=' + topicFilter : ''));
+  curTopicIds = ts.map(t => t.id);
   $('#topics-list').innerHTML = ts.length ? ts.map(t => {
     const src = SRC[t.source || 'combo'] || SRC.combo;
     const tag = t.source === 'hot' && t.hot
