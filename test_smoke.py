@@ -377,11 +377,42 @@ ok29 = (pools.LINE_NAMES.get("纯文") == "纯真笔触"
 print("29) 纯文线（纯真笔触）:", ok29)
 
 # 30) 标题统一两段式：三条线标题要求均含两段式，样本库全两段
-banks30 = prompts.TITLE_BANK_SUS + prompts.TITLE_BANK_WARM + prompts.TITLE_BANK_PURE
+banks30 = (prompts.TITLE_BANK_SUS + prompts.TITLE_BANK_WARM
+           + prompts.TITLE_BANK_PURE + prompts.TITLE_BANK_FAN)
 import re as _re
 def _two_part(t):
     return bool(_re.search(r"[，,——？?！!]", t))
 ok30 = (all("两段式" in m[1]["content"] for m in (m29_tt, m29_ttw, m29_tts))
     and all(_two_part(t) for t in banks30))
 print("30) 标题两段式统一:", ok30)
+
+# 31) 二创线：四类底座选题池+情怀反差口径贯通
+import random as _random
+c31 = pools.sample_fan_combo(_random.Random(1))
+ok31 = (all(k in c31 for k in ("main", "base", "ip", "role", "twist", "emo"))
+    and c31["base"] in pools.FAN_BASES
+    and pools.LINE_NAMES.get("二创") == "二创改编")
+_t31 = {"title": "穿成巡山小妖", "hook": "小妖掀桌", "line": "二创"}
+m31_top = prompts.topic_messages([c31], [], line="二创")
+m31_out = prompts.outline_messages(_t31)
+m31_sec = prompts.section_messages(
+    {"title": "x", "line": "二创", "topic": {"line": "二创"},
+     "outline": _o29, "summaries": []}, 1, 5)
+m31_rev = prompts.review_messages("x", "正文", line="二创")
+m31_tt = prompts.title_messages(_t31, _o29, line="二创")
+ok31 &= (m31_top[0]["content"] == prompts.SYS_TOPIC_FAN
+    and "底座" in m31_top[1]["content"] and "两段式" in m31_top[1]["content"]
+    and m31_out[0]["content"] == prompts.SYS_WRITER_FAN
+    and "二创要求" in m31_out[1]["content"]
+    and m31_sec[0]["content"] == prompts.SYS_WRITER_FAN
+    and "二创铁律" in m31_sec[1]["content"]
+    and m31_rev[0]["content"] == prompts.SYS_REVIEW_FAN
+    and "考据" in m31_rev[1]["content"]
+    and "穿成巡山小妖" in m31_tt[1]["content"]
+    and "两段式" in m31_tt[1]["content"]
+    and all(_two_part(t) for t in prompts.TITLE_BANK_FAN)
+    and 'data-line="二创"' in usrc and "src-fan" in usrc
+    and "'二创': '二创改编'" in usrc)
+print("31) 二创线（二创改编）:", ok31)
+
 

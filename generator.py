@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """选题与正文生成：大纲先行、标题随后、分节续写、逐节摘要保持连贯。
-三条风格线：悬疑（上头法则）/ 温情（情绪法则）/ 纯文（纯真笔触法则），
-选题数据自带 line 字段。"""
+四条风格线：悬疑（上头法则）/ 温情（情绪法则）/ 纯文（纯真笔触法则）/
+二创（二创铁律+上头法则），选题数据自带 line 字段。"""
 import json
 import random
 import re
@@ -24,6 +24,9 @@ def _as_list(x):
 
 
 def _combo_text(c):
+    if "base" in c:
+        return (f"{c['main']}·{c['base']}·{c['ip']} × 身份「{c['role']}」"
+                f" × 反差「{c['twist']}」 × 情怀「{c['emo']}」")
     if "engine" in c:
         return (f"{c['main']}·{c['plot']}·{c['bg']}·{c['emo']}"
                 f" × 人设「{c['stance']}」 × 底牌「{c['engine']}」")
@@ -43,7 +46,9 @@ def _gen_line_topics(n, log, line):
               for b in bench]
     rng = random.SystemRandom()
     combos, seen = [], set()
-    sampler = pools.sample_combo if line == "悬疑" else pools.sample_warm_combo
+    sampler = (pools.sample_combo if line == "悬疑"
+               else pools.sample_fan_combo if line == "二创"
+               else pools.sample_warm_combo)
     while len(combos) < n:
         c = sampler(rng)
         sig = "|".join(str(v) for v in c.values())
@@ -68,7 +73,7 @@ def _gen_line_topics(n, log, line):
 
 
 def gen_topics(n=6, log=print, line="悬疑"):
-    """line：悬疑（无脑爽文）/ 温情（细腻写实）。"""
+    """line：悬疑（无脑爽文）/ 温情（细腻写实）/ 纯文（纯真笔触）/ 二创（二创改编）。"""
     return _gen_line_topics(n, log, line)
 
 
