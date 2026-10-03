@@ -110,7 +110,9 @@ details input[type=checkbox]{width:auto}
 .where{color:var(--dim)}
 .dim{color:var(--dim)}
 
-#publish-panel{border-top:1px dashed var(--line);margin-top:16px;padding-top:12px}
+#publish-panel{border-top:1px dashed var(--line);margin-top:16px;padding-top:12px;scroll-margin-top:64px}
+#publish-panel.flash{animation:panel-flash 1.6s ease}
+@keyframes panel-flash{0%,55%{background:var(--acc-dim);box-shadow:0 0 0 6px var(--acc-dim);border-radius:8px}}
 .step{font-size:13px;color:var(--muted);line-height:2}
 .step b{color:var(--text)}
 .step .no{color:var(--acc);font-weight:600;margin-right:9px}
@@ -638,8 +640,12 @@ async function markPublished() {
 
 /* ---------- 发布 ---------- */
 async function doPublish() {
-  $('#publish-panel').hidden = false;
+  const p = $('#publish-panel');
+  p.hidden = false;
   if (CFG) $('#writer-link').href = CFG.writer_url;
+  p.scrollIntoView({ block: 'start' });
+  p.classList.remove('flash'); void p.offsetWidth;
+  p.classList.add('flash');
 }
 async function openWriter() {
   const st = $('#pub-status');
