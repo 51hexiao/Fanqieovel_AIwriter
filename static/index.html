@@ -205,6 +205,12 @@ details.t-more .t-meta{margin-bottom:0}
     <div class="bar">
       <b id="ed-id" style="color:var(--cyan)"></b>
       <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
+      <span class="status" id="ed-status"></span>
+      <span style="flex:1"></span>
+      <button onclick="saveStory()">保存修改</button>
+      <button onclick="rejectStory()">废弃这篇</button>
+    </div>
+    <div class="bar" style="margin-top:6px">
       <button onclick="doQC()">本地质检</button>
       <button onclick="doReview()">AI逻辑审查</button>
       <button onclick="doPolish()">润色去AI味</button>
@@ -212,20 +218,14 @@ details.t-more .t-meta{margin-bottom:0}
       <button onclick="markPublished()">标记已发布</button>
       <button class="primary" onclick="doPublish()">打开发布助手</button>
       <button onclick="doExport()">导出TXT</button>
-      <span class="status" id="ed-status"></span>
     </div>
     <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
     <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
-    <div class="bar" style="margin-top:8px">
-      <button onclick="saveStory()">保存修改</button>
-      <span class="hint">改完标题或正文随手保存；上排按钮是处理与发布动作</span>
-    </div>
     <div id="qc-report"></div>
     <div id="review-report"></div>
     <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="3"></textarea></div>
     <div class="bar">
       <button class="primary" onclick="startQuality()">下达意见·启动质量环</button>
-      <button onclick="rejectStory()">废弃这篇</button>
       <span class="hint">改稿→校对→终审全自动，最多两轮；达标自动入库，不达标自动废弃</span>
     </div>
     <div id="quality-report"></div>
