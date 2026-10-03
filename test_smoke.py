@@ -605,3 +605,11 @@ nosec35 = prompts.section_messages(
 ok35 &= "本篇表达倾向" not in nosec35[0]["content"]
 db.delete_story(sid35)
 print("35) 表达倾向变体 A/B（随机+日志+存库）:", ok35)
+
+# 36) 新功能界面可见：事实核对/待人工确认/风格变体/模式/调味都有渲染口
+ok36 = ("[事实核对]" in usrc and "[待人工确认]" in usrc
+        and "q.fact_qc" in usrc and "fq.skipped" in usrc
+        and "风格变体" in usrc and "s.variant ?" in usrc
+        and "FAN_MODE" in usrc and "调味·" in usrc
+        and ".src-flavor{" in usrc)
+print("36) 新功能界面可见:", ok36)

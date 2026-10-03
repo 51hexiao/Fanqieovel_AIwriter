@@ -58,6 +58,7 @@ button.mini{padding:3px 10px;font-size:12px}
 .src-warm{color:#b4547a;background:rgba(180,84,122,.1)}
 .src-fan{color:#7c3aed;background:rgba(124,58,237,.1)}
 .src-rigor{color:#1e5fa8;background:rgba(30,95,168,.1)}
+.src-flavor{color:#0f766e;background:rgba(13,148,136,.1)}
 .t-hotline{font-size:12px;color:var(--muted);margin-bottom:8px}
 .t-hotline b{color:var(--amber);font-weight:600}
 .fbtn.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
@@ -499,6 +500,7 @@ function setLineFilter(v) {
   loadTopics();
 }
 const SRC = {combo: ['随机', ''], hot: ['热点', 'src-hot'], manual: ['手动', 'src-manual']};
+const FAN_MODE = {gap: '补原作空白', butterfly: '蝴蝶效应'};
 async function loadTopics() {
   const qs = [];
   if (topicFilter) qs.push('status=' + topicFilter);
@@ -514,7 +516,7 @@ async function loadTopics() {
     <div class="card${topicSel.has(t.id) ? ' selected' : ''}">
       <input type="checkbox" class="t-pick" title="多选" ${topicSel.has(t.id) ? 'checked' : ''} onchange="pickTopic(${t.id}, this.checked, this)">
       <button class="t-del" title="删除这条选题" onclick="delTopic(${t.id})">✕</button>
-      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line && t.line !== '悬疑' ? `<span class="t-src ${t.line === '严谨' ? 'src-rigor' : t.line === '二创' ? 'src-fan' : 'src-warm'}">${LINE_NAMES[t.line] || t.line}</span>` : ''}${t.used_count ? `<span class="t-src src-used">已用${t.used_count}次</span>` : ''}</div>
+      <div class="t-title">${esc(t.title)}<span class="t-src ${src[1]}">${src[0]}</span>${t.line && t.line !== '悬疑' ? `<span class="t-src ${t.line === '严谨' ? 'src-rigor' : t.line === '二创' ? 'src-fan' : 'src-warm'}">${LINE_NAMES[t.line] || t.line}</span>` : ''}${t.mode ? `<span class="t-src src-fan">${FAN_MODE[t.mode] || esc(t.mode)}</span>` : ''}${t.flavor ? `<span class="t-src src-flavor">调味·${esc(t.flavor)}</span>` : ''}${t.used_count ? `<span class="t-src src-used">已用${t.used_count}次</span>` : ''}</div>
       ${tag}${combo}
       <div class="t-hook" title="${esc(t.hook || '')}">${esc(t.hook || '')}</div>
       <details class="t-more"><summary>议题与差异</summary>
@@ -628,6 +630,17 @@ function renderQuality(q) {
          (hard.length ? hard.map(fmt).join('；') : '硬伤：无') +
          (minor.length ? `<span style="color:var(--muted)">｜轻微：${minor.map(fmt).join('；')}</span>` : '') + '</div>';
   });
+  const fq = q.fact_qc || null;
+  if (fq) {
+    const fis = fq.issues || [];
+    h += `<div class="qc-item"><span class="tag" style="color:var(--amber)">[事实核对]</span>` +
+         (fq.skipped ? '未运行（模型抽取失败，本轮跳过）' :
+          fis.length ? fis.map(i => `【${esc(i.type || '事实')}】${esc(i.detail || '')}${i.where ? `<span class="where"> — ${esc(i.where)}</span>` : ''}`).join('；') : '数值冲突 / 信息穿越：无') + '</div>';
+    const un = fq.uncertain || [];
+    if (un.length) {
+      h += `<div class="qc-item"><span class="tag" style="color:var(--red)">[待人工确认]</span>${un.map(esc).join('；')}</div>`;
+    }
+  }
   (q.reasons || []).forEach(r => {
     h += `<div class="qc-item"><span class="tag" style="color:var(--red)">[未过原因]</span>${esc(r)}</div>`;
   });
@@ -641,7 +654,7 @@ async function openStory(id) {
   $('#ed-title').value = s.title;
   $('#ed-body').value = s.body;
   $('#ed-note').value = s.note || '';
-  $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字`;
+  $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();
   $('#ed-cat').textContent = tMain ? '发布主分类：《' + tMain + '》' : '';
   renderQC(s.qc_json ? JSON.parse(s.qc_json) : null);
