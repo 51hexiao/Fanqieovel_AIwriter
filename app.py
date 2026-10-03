@@ -162,13 +162,15 @@ def reset_categories():
 
 
 @app.post("/api/topics/{tid}/write")
-def write_topic(tid: int):
+def write_topic(tid: int, payload: Optional[dict] = None):
     topics = {t["id"]: t for t in db.list_topics()}
     topic = topics.get(tid)
     if not topic:
         raise HTTPException(404, "选题不存在")
+    tier = ((payload or {}).get("tier") or "标准").strip()
+    sw = generator.WORD_TIERS.get(tier, 0)
     db.use_topic(tid)
-    return start_task("story", lambda log: generator.start_story(topic, log))
+    return start_task("story", lambda log: generator.start_story(topic, log, sec_words=sw))
 
 
 # ---------- 爆款拆解库 ----------

@@ -200,6 +200,11 @@ details.t-more .t-meta{margin-bottom:0}
   </div>
   <div class="bar" style="align-items:center">
     <button class="primary" onclick="openTopicModal()">＋ 手动录入选题</button>
+    <span class="lsep"></span>
+    <span class="hint" style="margin-right:-4px">字数</span>
+    <button class="fbtn active" data-tier="标准" onclick="setTier(this)" title="每节目标1500字×5节，成稿约5千~6千字">标准 5千+</button>
+    <button class="fbtn" data-tier="加长" onclick="setTier(this)" title="每节目标2100字×5节，成稿约8千字上下">加长 8千+</button>
+    <button class="fbtn" data-tier="特长" onclick="setTier(this)" title="每节目标2800字×5节，成稿约1.1万字上下">特长 1.1万+</button>
     <span style="flex:1"></span>
     <span class="hint" style="margin-right:-4px">只看</span>
     <button class="fbtn active" data-f="" onclick="setFilter(this)">全部</button>
@@ -485,7 +490,7 @@ async function batchWrite() {
   for (let i = 0; i < ids.length; i++) {
     busy(st, `批量写稿 ${i + 1}/${ids.length}：选题 #${ids[i]} 生成中…`);
     try {
-      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST'});
+      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST', body: JSON.stringify({tier: genTier})});
       await poll(task_id, s => busy(st, `批量写稿 ${i + 1}/${ids.length}：${s}`));
     } catch (e) {
       idle(st, '✗ 选题 #' + ids[i] + ' 写稿失败：' + e.message, 'err');
@@ -589,11 +594,16 @@ async function delTopic(id) {
   await api('/api/topics/' + id, {method: 'DELETE'});
   loadTopics();
 }
+let genTier = '标准';
+function setTier(btn) {
+  genTier = btn.dataset.tier;
+  document.querySelectorAll('.fbtn[data-tier]').forEach(b => b.classList.toggle('active', b === btn));
+}
 async function writeTopic(id) {
   const st = $('#topics-status');
   busy(st, '写作流水线启动…');
   try {
-    const {task_id} = await api('/api/topics/' + id + '/write', {method: 'POST'});
+    const {task_id} = await api('/api/topics/' + id + '/write', {method: 'POST', body: JSON.stringify({tier: genTier})});
     await poll(task_id, s => busy(st, s));
     idle(st, '✓ 写完了，已放入稿件库', 'ok');
     loadTopics();
@@ -743,7 +753,8 @@ async function openStory(id) {
   $('#ed-title').value = s.title;
   $('#ed-body').value = s.body;
   $('#ed-note').value = s.note || '';
-  $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
+  const tierName = (s.sec_words || 0) >= 2500 ? '特长' : (s.sec_words || 0) >= 1800 ? '加长' : '';
+  $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${tierName ? ' ▏' + tierName + '档' : ''}${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();
   $('#ed-cat').textContent = tMain ? '发布主分类：《' + tMain + '》' : '';
   renderEditorActions(s);

@@ -624,3 +624,24 @@ ok37 = ('.s-wrap{display:grid' in usrc and 'id="story-chips"' in usrc
         and "stories-body" not in usrc
         and "scrollIntoView({behavior: 'smooth'})" not in usrc)
 print("37) 稿件页两栏改版:", ok37)
+
+# 38) 字数档位：随稿存库 → 分节提示词动态目标+字数下限+防注水；max_tokens 随篇幅
+ok38 = (generator.WORD_TIERS == {"标准": 1500, "加长": 2100, "特长": 2800}
+        and "全文五节共约6800字" not in open("prompts.py", encoding="utf-8").read())
+st38 = {"title": "档位测试", "line": "悬疑",
+        "outline": {"sections": [{"no": i, "beats": ["b"]} for i in range(1, 6)],
+                    "characters": [], "clues": []}, "summaries": []}
+st38["sec_words"] = 2100
+m38 = prompts.section_messages(st38, 1, 5)[1]["content"]
+ok38 = ok38 and ("本节约2100字" in m38 and "不得少于1785字" in m38
+                 and "目标总字数约10500字" in m38 and "加长篇幅" in m38)
+st38["sec_words"] = 0
+m38b = prompts.section_messages(st38, 1, 5)[1]["content"]
+ok38 = ok38 and ("本节约1350字" in m38b and "不得少于1147字" in m38b
+                 and "加长篇幅" not in m38b)
+sid38 = db.create_story({"title": "档位测试", "line": "悬疑"}, {}, sec_words=2100)
+ok38 = ok38 and db.get_story(sid38)["sec_words"] == 2100
+ok38 = ok38 and ("data-tier" in usrc and "setTier(this)" in usrc
+                 and "tier: genTier" in usrc and "特长 1.1万+" in usrc
+                 and "tierName" in usrc)
+print("38) 字数档位:", ok38)

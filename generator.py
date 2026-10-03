@@ -91,8 +91,15 @@ def gen_topics(n=6, log=print, line="悬疑"):
     return _gen_line_topics(n, log, line)
 
 
-def start_story(topic, log=print):
+# 字数档位：每节目标字数（全文固定 5 节，实际成稿通常为目标 7~9 成）
+WORD_TIERS = {"标准": 1500, "加长": 2100, "特长": 2800}
+
+
+def start_story(topic, log=print, sec_words=0):
     line = topic.get("line") or "悬疑"
+    sec_words = int(sec_words or 0)
+    if sec_words:
+        log(f"字数档位：每节目标 {sec_words} 字，全文目标约 {sec_words * 5} 字")
     vr = pools.sample_variant(random.SystemRandom(), line)
     if vr:
         log(f"本篇风格变体：{vr['key']}（{vr['name']}）")
@@ -119,7 +126,7 @@ def start_story(topic, log=print):
             log("标题候选为空，沿用选题标题")
     except Exception as exc:
         log("标题生成失败，沿用选题标题：" + str(exc))
-    sid = db.create_story(topic, outline, title=new_title)
+    sid = db.create_story(topic, outline, title=new_title, sec_words=sec_words)
     db.update_story(sid, variant=(f"{vr['key']}·{vr['name']}" if vr else ""))
     total = len(outline.get("sections", [])) or 5
     for i in range(1, total + 1):
@@ -127,7 +134,7 @@ def start_story(topic, log=print):
         story = db.get_story(sid)
         raw = llm.chat(prompts.section_messages(story, i, total),
                        temperature=llm.cfg("temperature_write", 0.85),
-                       max_tokens=3500)
+                       max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
         m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
         summary = m.group(1).strip() if m else ""
         text = (raw[:m.start()] if m else raw).strip()
@@ -164,7 +171,8 @@ def polish_story(sid, log=print):
         label = f"「{mk}」" if mk else "全文"
         log(f"润色{label}…")
         new = llm.chat(prompts.polish_messages(txt, story["title"]),
-                       temperature=0.5, max_tokens=4000).strip()
+                       temperature=0.5,
+                       max_tokens=min(8000, max(4000, int(len(txt) * 1.5)))).strip()
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
         out.append(f"{mk}\n{new}" if mk else new)
     body2 = db.clean_text("\n".join(out))
@@ -208,7 +216,8 @@ def revise_story(sid, note, review_issues, qc_issues, ledger=None,
         new = llm.chat(prompts.revise_messages(story["title"], line, note,
                                                review_issues, qc_issues,
                                                label, txt, ledger),
-                       temperature=0.4, max_tokens=4000).strip()
+                       temperature=0.4,
+                       max_tokens=min(8000, max(4000, int(len(txt) * 1.5)))).strip()
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
         out.append(f"{mk}\n{new}" if mk else new)
     body2 = db.clean_text("\n".join(out))

@@ -69,6 +69,8 @@ CREATE TABLE IF NOT EXISTS bench_reports(
             c.execute("ALTER TABLE stories ADD COLUMN quality_json TEXT DEFAULT ''")
         if "variant" not in cols:
             c.execute("ALTER TABLE stories ADD COLUMN variant TEXT DEFAULT ''")
+        if "sec_words" not in cols:
+            c.execute("ALTER TABLE stories ADD COLUMN sec_words INTEGER DEFAULT 0")
         tcols = {r[1] for r in c.execute("PRAGMA table_info(topics)")}
         if "used_count" not in tcols:
             c.execute("ALTER TABLE topics ADD COLUMN used_count INTEGER DEFAULT 0")
@@ -107,16 +109,16 @@ def _assemble(sections):
 
 
 # ---------- 稿件 ----------
-def create_story(topic, outline, title=None):
+def create_story(topic, outline, title=None, sec_words=0):
     with _lock, _conn() as c:
         cur = c.execute(
             "INSERT INTO stories(title,topic_json,outline_json,sections_json,"
-            "summaries_json,body,word_count,status,line,created_at,updated_at)"
-            " VALUES(?,?,?,?,?,'',0,'generating',?,?,?)",
+            "summaries_json,body,word_count,status,line,sec_words,created_at,updated_at)"
+            " VALUES(?,?,?,?,?,'',0,'generating',?,?,?,?)",
             (title or topic.get("title", ""),
              json.dumps(topic, ensure_ascii=False),
              json.dumps(outline, ensure_ascii=False), "[]", "[]",
-             topic.get("line") or "悬疑", now(), now()))
+             topic.get("line") or "悬疑", int(sec_words or 0), now(), now()))
         return cur.lastrowid
 
 
