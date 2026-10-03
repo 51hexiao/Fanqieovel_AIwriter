@@ -203,7 +203,6 @@ details.t-more .t-meta{margin-bottom:0}
     <div class="bar">
       <b id="ed-id" style="color:var(--cyan)"></b>
       <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
-      <button onclick="saveStory()">保存修改</button>
       <button onclick="doQC()">本地质检</button>
       <button onclick="doReview()">AI逻辑审查</button>
       <button onclick="doPolish()">润色去AI味</button>
@@ -215,6 +214,10 @@ details.t-more .t-meta{margin-bottom:0}
     </div>
     <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
     <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
+    <div class="bar" style="margin-top:8px">
+      <button onclick="saveStory()">保存修改</button>
+      <span class="hint">改完标题或正文随手保存；上排按钮是处理与发布动作</span>
+    </div>
     <div id="qc-report"></div>
     <div id="review-report"></div>
     <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="3"></textarea></div>
