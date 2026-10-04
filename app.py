@@ -471,42 +471,83 @@ def _auto_draft(ctx, page, s, log):
         else "已点击存草稿（未捕捉到保存状态，请在浏览器里确认一下）")
 
 
+CDP_STATE = paths.DATA_DIR / "browser_cdp.json"
+
+
+def _cdp_alive(port):
+    import urllib.request
+    try:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/json/version", timeout=1.5):
+            return True
+    except Exception:
+        return False
+
+
+def _find_local_browser():
+    import os
+    import shutil
+    cands = [shutil.which("msedge"), shutil.which("chrome"),
+             os.path.join(os.environ.get("ProgramFiles(x86)", "") or "",
+                          r"Microsoft\Edge\Application\msedge.exe"),
+             os.path.join(os.environ.get("ProgramFiles", "") or "",
+                          r"Microsoft\Edge\Application\msedge.exe")]
+    return next((c for c in cands if c and os.path.exists(c)), None)
+
+
 def _open_writer_browser(sid, log):
+    """发布助手用常驻浏览器：独立配置目录 + 调试端口，任务只连接不关闭。
+    首次由工作台拉起，之后每次发布直接复用已打开、已登录的同一窗口。"""
     s = db.get_story(sid)
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise RuntimeError("未安装 playwright，发布助手不可用；可手动打开后台粘贴发布")
-    log("启动发布助手浏览器（独立配置，登录只保存在本机；首次需登录一次，之后免登录）…")
-    profile_dir = str(paths.DATA_DIR / "browser_profile")
-    with sync_playwright() as p:
+    port = 9333
+    if CDP_STATE.exists():
         try:
-            ctx = p.chromium.launch_persistent_context(
-                user_data_dir=profile_dir, headless=False, chromium_sandbox=True)
+            port = int(json.loads(CDP_STATE.read_text(encoding="utf-8"))["port"])
         except Exception:
+            pass
+    with sync_playwright() as p:
+        browser = None
+        if _cdp_alive(port):
             try:
-                log("未找到内置 Chromium，改用系统 Edge 浏览器…")
-                ctx = p.chromium.launch_persistent_context(
-                    user_data_dir=profile_dir, headless=False,
-                    channel="msedge", chromium_sandbox=True)
+                browser = p.chromium.connect_over_cdp(
+                    f"http://127.0.0.1:{port}", timeout=8000)
+                log("已连接常驻发布助手浏览器（复用同一窗口与登录）")
             except Exception:
-                ctx = p.chromium.launch_persistent_context(
-                    user_data_dir=profile_dir, headless=False, channel="msedge")
+                browser = None
+        if browser is None:
+            exe = _find_local_browser()
+            if not exe:
+                raise RuntimeError("未找到 Edge/Chrome，无法启动发布助手浏览器")
+            import subprocess
+            subprocess.Popen([exe, f"--remote-debugging-port={port}",
+                              f"--user-data-dir={paths.DATA_DIR / 'browser_profile'}",
+                              "--no-first-run", "--no-default-browser-check",
+                              "about:blank"])
+            for _ in range(40):
+                if _cdp_alive(port):
+                    break
+                time.sleep(0.5)
+            if not _cdp_alive(port):
+                raise RuntimeError("发布助手浏览器启动失败，请重试或手动打开后台粘贴发布")
+            browser = p.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}", timeout=8000)
+            CDP_STATE.write_text(json.dumps({"port": port}), encoding="utf-8")
+            log("发布助手浏览器已启动（常驻）：首次使用请在这里登录一次番茄账号，"
+                "登录保存在本机，窗口不关、下次免登录")
+        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
             _auto_draft(ctx, page, s, log)
-            log("浏览器保持打开：完成封面/分类并发布后，回工作台点「标记已发布」")
-            while ctx.pages:
-                ctx.pages[0].wait_for_event("close", timeout=0)
-        except Exception:
-            # 浏览器留着给用户手动善后
-            raise
+            log("浏览器保持打开（常驻）：完成封面/分类并人工发布后，回工作台点「标记已发布」")
         finally:
             try:
-                ctx.close()
+                browser.close()  # 仅断开工作台与浏览器的连接，不关闭浏览器窗口
             except Exception:
                 pass
-    log("浏览器已关闭")
     return True
 
 
