@@ -345,7 +345,7 @@ def _human_click(pg, loc):
             return
     except Exception:
         pass
-    loc.click()
+    loc.click(timeout=6000)
 
 
 def _visible(loc):
@@ -367,6 +367,15 @@ def _pick_body(ed):
         except Exception:
             pass
     return best if best is not None else ed.locator("textarea").first
+
+
+def _cover_open(editor):
+    """「完成制作」按钮还可见，说明封面弹窗没关。"""
+    try:
+        loc = editor.get_by_text("完成制作")
+        return bool(loc.count() and loc.first.is_visible())
+    except Exception:
+        return False
 
 
 def _click_text(pg, txt, exact=True, pick="first"):
@@ -506,21 +515,26 @@ def _auto_draft(ctx, page, s, log):
     log("封面：尝试用「封面制作」自动生成…")
     if _click_text(editor, "封面制作", exact=False):
         editor.wait_for_timeout(1800 + random.randint(0, 900))
-        for key in ("随机", "模板", "使用模板", "生成"):
-            if _click_text(editor, key, exact=False, pick="last"):
-                editor.wait_for_timeout(1500 + random.randint(0, 800))
-                break
-        confirmed = False
-        for key in ("确定", "使用封面", "保存", "完成"):
-            if _click_text(editor, key, exact=True, pick="last"):
-                editor.wait_for_timeout(1200)
-                confirmed = True
-                break
-        if confirmed:
-            log("✓ 封面已用「封面制作」生成（不满意可在页面里重选）")
-        else:
+        # 模板默认选中第一张，直接点「完成制作」确认
+        if _click_text(editor, "完成制作", exact=True, pick="last"):
+            editor.wait_for_timeout(2500 + random.randint(0, 1000))
+        if _cover_open(editor):
+            for key in ("确定", "使用封面", "保存"):
+                if _click_text(editor, key, exact=True, pick="last"):
+                    editor.wait_for_timeout(1500)
+                    break
+        if _cover_open(editor):
             editor.keyboard.press("Escape")
-            log("⚠ 封面弹窗未能自动确认，已关闭，请手动选一张封面")
+            editor.wait_for_timeout(800)
+        if _cover_open(editor):
+            for x in ("×", "✕", "关闭"):
+                if _click_text(editor, x, exact=True, pick="last"):
+                    editor.wait_for_timeout(800)
+                    break
+        if _cover_open(editor):
+            log("⚠ 封面弹窗关不掉，请手动点「完成制作」或右上角 ×，程序继续等其余项")
+        else:
+            log("✓ 封面已用「封面制作」生成（不满意可在页面里重选）")
     else:
         log("⚠ 未找到「封面制作」入口，请手动设置封面")
 
