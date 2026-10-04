@@ -654,3 +654,12 @@ ok39 = ('id="ed-pipe"' in usrc and "function renderPipe" in usrc
         and "s-prog" in usrc and "流水线：① 生成" in usrc
         and "startQuality(), '下达意见·启动质量环', 'primary'" not in usrc)
 print("39) 稿件页流程可视化:", ok39)
+
+# 40) 审查结果独立右栏：整页三列（列表|正文|报告），空报告卡隐藏，显隐同步
+ok40 = ('grid-template-columns:340px minmax(360px,1fr) minmax(280px,330px)' in usrc
+        and 'class="s-reps"' in usrc and "审查结果" in usrc
+        and ".s-reps>div:empty{display:none}" in usrc
+        and "id=\"reps-empty\"" in usrc
+        and "reps-empty').hidden" in usrc
+        and "ed-bottom" not in usrc and "ed-reps" not in usrc)
+print("40) 审查结果右栏三列布局:", ok40)

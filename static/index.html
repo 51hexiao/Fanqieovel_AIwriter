@@ -27,6 +27,8 @@ nav button.active{color:var(--acc);background:var(--acc-dim);font-weight:600}
 #global-status{margin-left:auto;color:var(--dim);font-size:12.5px}
 
 main{max-width:1080px;margin:24px auto 64px;padding:0 18px}
+/* 稿件页三列布局需要更宽的画布，其他页签维持 1080 */
+main:has(#tab-stories:not([hidden])){max-width:1320px}
 .crumb{color:var(--muted);font-size:13px;margin-bottom:14px}
 
 .bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
@@ -59,7 +61,7 @@ button.mini{padding:3px 10px;font-size:12px}
 .src-fan{color:#7c3aed;background:rgba(124,58,237,.1)}
 .src-rigor{color:#1e5fa8;background:rgba(30,95,168,.1)}
 .src-flavor{color:#0f766e;background:rgba(13,148,136,.1)}
-.s-wrap{display:grid;grid-template-columns:380px 1fr;gap:16px;align-items:start}
+.s-wrap{display:grid;grid-template-columns:340px minmax(360px,1fr) minmax(280px,330px);gap:16px;align-items:start}
 .s-side,.s-main{min-width:0}
 .fbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 #stories-list{margin-top:10px;max-height:calc(100vh - 250px);overflow:auto;padding-right:2px}
@@ -95,6 +97,14 @@ button.mini{padding:3px 10px;font-size:12px}
 .s-prog i{height:3px;flex:1;border-radius:2px;background:var(--line)}
 .s-prog i.on{background:var(--acc)}
 .s-prog i.rj{background:var(--red)}
+/* 编辑器右侧：审查结果独立栏（列表 | 正文 | 报告 三列布局） */
+.s-reps{min-width:0;position:sticky;top:10px;display:flex;flex-direction:column}
+.s-reps-h{font-size:12px;color:var(--muted);margin:2px 2px 8px;font-weight:600;letter-spacing:1px}
+.s-reps>div{min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel);margin-bottom:10px}
+.s-reps>div:empty{display:none}
+.s-reps .qc-head{margin:0 0 8px;padding:0;border-top:none;font-size:12.5px}
+.s-reps .qc-item{font-size:12px}
+#ed-loop{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel);margin-top:4px}
 .t-hotline{font-size:12px;color:var(--muted);margin-bottom:8px}
 .t-hotline b{color:var(--amber);font-weight:600}
 .fbtn.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
@@ -312,16 +322,13 @@ details.t-more .t-meta{margin-bottom:0}
         <div class="bar" id="ed-actions" style="margin-top:6px"></div>
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
         <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
-        <div id="qc-report"></div>
-        <div id="review-report"></div>
         <div id="ed-loop">
-          <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="3"></textarea></div>
+          <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="4"></textarea></div>
           <div class="bar">
             <button class="primary" onclick="startQuality()">下达意见·启动质量环</button>
             <span class="hint">改稿→校对→终审全自动，最多两轮；达标自动入库，不达标自动废弃</span>
           </div>
         </div>
-        <div id="quality-report"></div>
         <div id="publish-panel" hidden>
           <div class="qc-head" style="border-top:none;padding-top:0;margin-top:8px">发布助手</div>
           <div class="step"><span class="no">01</span>点「自动填入草稿」：自动打开后台 → 新建短故事 → 填入标题和正文 → 存草稿（首次需扫码登录，之后免登录）</div>
@@ -336,6 +343,13 @@ details.t-more .t-meta{margin-bottom:0}
           </div>
         </div>
       </div>
+    </div>
+    <div class="s-reps">
+      <div class="s-reps-h">审查结果</div>
+      <div id="reps-empty" class="hint" style="padding:4px 2px">← 选一篇稿件后，质检 / AI审稿 / 质量环的结果显示在这里</div>
+      <div id="qc-report"></div>
+      <div id="review-report"></div>
+      <div id="quality-report"></div>
     </div>
   </div>
 </section>
@@ -700,7 +714,7 @@ async function cleanupEmpty() {
   if (!empties.length) return;
   if (!confirm('删除 ' + empties.length + ' 篇空稿（没有正文的占位稿）？')) return;
   for (const s of empties) await api('/api/stories/' + s.id, {method: 'DELETE'});
-  if (empties.some(s => s.id === curId)) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; }
+  if (empties.some(s => s.id === curId)) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
   loadStories();
 }
 /* 流水线：当前步骤索引（4 = 全部完成）；入库是瞬时动作，approved 直接点亮"发布" */
@@ -815,6 +829,7 @@ async function openStory(id) {
   const s = await api('/api/stories/' + id);
   $('#editor').hidden = false;
   $('#editor-empty').hidden = true;
+  $('#reps-empty').hidden = true;
   $('#ed-id').textContent = '#' + s.id;
   $('#ed-title').value = s.title;
   $('#ed-body').value = s.body;
@@ -929,7 +944,7 @@ function doExport() { window.open(`/api/stories/${curId}/export`); }
 async function delStory(id) {
   if (!confirm('删除稿件 #' + id + '？')) return;
   await api('/api/stories/' + id, {method: 'DELETE'});
-  if (curId === id) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; }
+  if (curId === id) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
   loadStories();
 }
 
