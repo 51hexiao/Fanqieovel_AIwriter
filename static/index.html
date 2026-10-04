@@ -90,9 +90,11 @@ button.mini{padding:3px 10px;font-size:12px}
 .p-ev b{font-weight:600}
 .p-ev .good{color:var(--green)}
 .p-ev .bad{color:var(--red)}
-.ed-cta{padding:8px 18px;font-weight:600}
-.ed-danger{color:var(--red);margin-left:auto;background:none;border-color:transparent}
+.ed-cta{padding:8px 18px}
+.ed-sub{padding:6px 12px;font-size:12.5px;color:var(--muted);background:transparent}
+.ed-danger{margin-left:auto;padding:6px 12px;font-size:12.5px;color:var(--red);background:none;border-color:transparent}
 .ed-danger:hover{border-color:var(--red);color:var(--red)}
+#ed-actions{gap:8px}
 .s-prog{display:flex;gap:3px;margin-top:7px}
 .s-prog i{height:3px;flex:1;border-radius:2px;background:var(--line)}
 .s-prog i.on{background:var(--acc)}
@@ -316,8 +318,8 @@ details.t-more .t-meta{margin-bottom:0}
           <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
           <span class="status" id="ed-status"></span>
           <span style="flex:1"></span>
-          <button onclick="saveStory()">保存修改</button>
-          <button onclick="doExport()">导出TXT</button>
+          <button class="ed-sub" onclick="saveStory()">保存修改</button>
+          <button class="ed-sub" onclick="doExport()">导出TXT</button>
         </div>
         <div class="bar" id="ed-actions" style="margin-top:6px"></div>
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
@@ -757,14 +759,15 @@ function renderEditorActions(s) {
   const G = {
     generating: [],
     generated: [
-      ['approve()', '✓ 批准入库', 'ed-cta'], ['doQC()', '本地质检'], ['doReview()', 'AI逻辑审查'], ['doPolish()', '润色去AI味'],
-      ['rejectStory()', '废弃这篇', 'ed-danger'],
+      ['approve()', '批准入库', 'primary ed-cta'], ['doQC()', '本地质检', 'ed-sub'],
+      ['doReview()', 'AI审稿', 'ed-sub'], ['doPolish()', '润色', 'ed-sub'],
+      ['rejectStory()', '废弃', 'ed-danger'],
     ],
     approved: [
-      ['doPublish()', '打开发布助手', 'ed-cta'], ['markPublished()', '✓ 标记已发布'],
-      ['rejectStory()', '废弃这篇', 'ed-danger'],
+      ['doPublish()', '打开发布助手', 'primary ed-cta'], ['markPublished()', '标记已发布', 'ed-sub'],
+      ['rejectStory()', '废弃', 'ed-danger'],
     ],
-    published: [['doPublish()', '重新填入草稿']],
+    published: [['doPublish()', '重新填入草稿', 'ed-sub']],
     rejected: [['delStory(curId)', '彻底删除', 'ed-danger']],
   };
   $('#ed-actions').innerHTML = (G[s.status] || []).map(b =>

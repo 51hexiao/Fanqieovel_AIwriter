@@ -650,7 +650,9 @@ print("38) 字数档位:", ok38)
 ok39 = ('id="ed-pipe"' in usrc and "function renderPipe" in usrc
         and "PIPE_STEPS" in usrc and "PIPE_STAGE" in usrc
         and "质检·审核" in usrc and "renderPipe(s, qcRep, rvRep, quRep)" in usrc
-        and "'ed-cta'" in usrc and "'ed-danger'" in usrc
+        and "primary ed-cta" in usrc
+        and "'ed-danger'" in usrc and "'ed-sub'" in usrc
+        and "'AI审稿', 'ed-sub'" in usrc
         and "s-prog" in usrc and "流水线：① 生成" in usrc
         and "startQuality(), '下达意见·启动质量环', 'primary'" not in usrc)
 print("39) 稿件页流程可视化:", ok39)
