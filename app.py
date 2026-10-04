@@ -348,30 +348,36 @@ def _auto_draft(ctx, page, s, log):
         except Exception:
             sel = {}
 
-    # 1) 打开管理页；未登录会跳扫码页，等用户扫码后自动继续
+    # 1) 打开管理页；未登录会跳登录页——期间绝不自动跳转，静默等用户登录
     log("打开短故事管理页…")
     page.goto(MANAGE_URL, wait_until="domcontentloaded")
-    log("如出现二维码请扫码登录番茄账号，登录后自动继续…")
-    new_btn, i = None, 0
+    new_btn, i, logged_hint = None, 0, False
     deadline = time.time() + 600
     while time.time() < deadline:
-        target = None
         for pg in ctx.pages:
-            if "short-manage" in pg.url:
-                target = pg
-                break
-        if target is not None:
-            cand = (target.locator(sel["new_story_button"]) if sel.get("new_story_button")
-                    else target.get_by_text("新建短故事"))
+            if "short-manage" not in pg.url:
+                continue
+            cand = (pg.locator(sel["new_story_button"]) if sel.get("new_story_button")
+                    else pg.get_by_text("新建短故事"))
             if _visible(cand):
                 new_btn = cand.first
                 break
-        i += 1
-        if i % 8 == 0:  # 登录后可能被跳转到别页，定时回到管理页
+        if new_btn is not None:
+            break
+        on_login = any("/writer/login" in (pg.url or "") or "passport" in (pg.url or "")
+                       for pg in ctx.pages)
+        if on_login:
+            if not logged_hint:
+                log("检测到登录页：请在发布助手浏览器里完成登录（验证码/扫码都行）。"
+                    "输入过程不会被打断；登录状态保存在本机，下次发布免登录。")
+            logged_hint = True
+        elif i % 8 == 7:
+            # 已登录但被跳到别页：定时回管理页（登录页绝不回跳，避免清掉用户输入）
             try:
                 page.goto(MANAGE_URL, wait_until="domcontentloaded")
             except Exception:
                 pass
+        i += 1
         page.wait_for_timeout(2000)
     if new_btn is None:
         raise RuntimeError("10 分钟内未检测到「新建短故事」按钮，请确认已登录后重试")
@@ -437,17 +443,21 @@ def _open_writer_browser(sid, log):
         from playwright.sync_api import sync_playwright
     except ImportError:
         raise RuntimeError("未安装 playwright，发布助手不可用；可手动打开后台粘贴发布")
-    log("启动浏览器（登录状态保存在本机）…")
+    log("启动发布助手浏览器（独立配置，登录只保存在本机；首次需登录一次，之后免登录）…")
+    profile_dir = str(paths.DATA_DIR / "browser_profile")
     with sync_playwright() as p:
         try:
             ctx = p.chromium.launch_persistent_context(
-                user_data_dir=str(paths.DATA_DIR / "browser_profile"),
-                headless=False)
+                user_data_dir=profile_dir, headless=False, chromium_sandbox=True)
         except Exception:
-            log("未找到内置 Chromium，改用系统 Edge 浏览器…")
-            ctx = p.chromium.launch_persistent_context(
-                user_data_dir=str(paths.DATA_DIR / "browser_profile"),
-                headless=False, channel="msedge")
+            try:
+                log("未找到内置 Chromium，改用系统 Edge 浏览器…")
+                ctx = p.chromium.launch_persistent_context(
+                    user_data_dir=profile_dir, headless=False,
+                    channel="msedge", chromium_sandbox=True)
+            except Exception:
+                ctx = p.chromium.launch_persistent_context(
+                    user_data_dir=profile_dir, headless=False, channel="msedge")
         page = ctx.pages[0] if ctx.pages else ctx.new_page()
         try:
             _auto_draft(ctx, page, s, log)

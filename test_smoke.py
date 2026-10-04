@@ -665,3 +665,11 @@ ok40 = ('grid-template-columns:340px minmax(360px,1fr) minmax(280px,330px)' in u
         and "reps-empty').hidden" in usrc
         and "ed-bottom" not in usrc and "ed-reps" not in usrc)
 print("40) 审查结果右栏三列布局:", ok40)
+
+# 41) 发布助手：登录页绝不自动跳转（防打断登录），沙箱开启，文案说明独立配置
+asrc = io.open("app.py", encoding="utf-8").read()
+ok41 = ("/writer/login" in asrc and "检测到登录页" in asrc
+        and "登录页绝不回跳" in asrc and "chromium_sandbox=True" in asrc
+        and "独立配置，登录只保存在本机" in asrc
+        and "独立配置，与你日常浏览器互不相通" in usrc)
+print("41) 发布助手登录等待修复:", ok41)
