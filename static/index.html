@@ -70,6 +70,31 @@ button.mini{padding:3px 10px;font-size:12px}
 .s-item .s-m{display:flex;align-items:center;gap:6px;font-size:11.5px;overflow:hidden}
 .s-item .s-m .dim{white-space:nowrap}
 .s-item .s-acts{margin-left:auto;display:flex;gap:4px;white-space:nowrap}
+/* 流程可视化：编辑器顶部流水线 + 质量证据 + 分层操作 */
+.pipe{display:flex;align-items:center;margin:2px 0 12px}
+.p-step{display:flex;align-items:center;gap:6px;min-width:0}
+.p-dot{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:11px;
+  color:var(--muted);background:var(--panel);flex:none;font-weight:600}
+.p-name{font-size:12px;color:var(--muted);white-space:nowrap}
+.p-line{flex:1;height:2px;background:var(--line);margin:0 8px;min-width:16px;border-radius:1px}
+.p-step.done .p-dot{background:var(--green);border-color:var(--green);color:#fff}
+.p-step.cur .p-dot{border-color:var(--acc);color:var(--acc);box-shadow:0 0 0 3px var(--acc-dim)}
+.p-step.cur .p-name{color:var(--acc);font-weight:600}
+.p-step.rej .p-dot{border-color:var(--red);color:var(--red)}
+.p-step.rej .p-name{color:var(--red);font-weight:600}
+.p-ev{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.p-ev span{font-size:11px;padding:2px 9px;border:1px solid var(--line);border-radius:20px;color:var(--muted)}
+.p-ev b{font-weight:600}
+.p-ev .good{color:var(--green)}
+.p-ev .bad{color:var(--red)}
+.ed-cta{padding:8px 18px;font-weight:600}
+.ed-danger{color:var(--red);margin-left:auto;background:none;border-color:transparent}
+.ed-danger:hover{border-color:var(--red);color:var(--red)}
+.s-prog{display:flex;gap:3px;margin-top:7px}
+.s-prog i{height:3px;flex:1;border-radius:2px;background:var(--line)}
+.s-prog i.on{background:var(--acc)}
+.s-prog i.rj{background:var(--red)}
 .t-hotline{font-size:12px;color:var(--muted);margin-bottom:8px}
 .t-hotline b{color:var(--amber);font-weight:600}
 .fbtn.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
@@ -257,7 +282,7 @@ details.t-more .t-meta{margin-bottom:0}
 <section id="tab-stories" hidden>
   <div class="s-wrap">
     <div class="s-side">
-      <div class="crumb">生成 → 质检 → 审核 → 发布</div>
+      <div class="crumb">流水线：① 生成 → ② 质检·审核 → ③ 入库 → ④ 发布</div>
       <div class="fbar" id="story-chips"></div>
       <div class="bar" style="margin-top:8px;gap:6px">
         <input type="text" id="story-q" placeholder="搜标题…" style="flex:1;min-width:0" oninput="storySearch(this.value)">
@@ -275,6 +300,7 @@ details.t-more .t-meta{margin-bottom:0}
     <div class="s-main">
       <div id="editor-empty" class="hint" style="padding:48px 0;text-align:center">← 从左侧选一篇稿件开始处理</div>
       <div id="editor" hidden>
+        <div id="ed-pipe"></div>
         <div class="bar">
           <b id="ed-id" style="color:var(--cyan)"></b>
           <span class="hint" id="ed-cat" style="white-space:nowrap"></span>
@@ -645,6 +671,10 @@ function renderStoryList() {
     const st = STATUS[s.status] || [s.status, ''];
     const lineBadge = s.line === '悬疑' ? '' :
       `<span class="badge ${s.line === '严谨' ? 'b-rigor' : s.line === '二创' ? 'b-fan' : 'b-warm'}">${LINE_NAMES[s.line] || s.line}</span>`;
+    const stage = {generating: 1, generated: 2, approved: 3, published: 4}[s.status] || 0;
+    const segs = s.status === 'rejected'
+      ? '<i class="rj"></i><i class="rj"></i><i class="rj"></i><i class="rj"></i>'
+      : Array.from({length: 4}, (_, i) => `<i${i < stage ? ' class="on"' : ''}></i>`).join('');
     return `<div class="s-item${s.id === curId ? ' sel' : ''}" data-sid="${s.id}" onclick="openStory(${s.id})">
       <div class="s-t">${esc(s.title) || '(未命名)'}</div>
       <div class="s-m"><span class="badge ${st[1]}">${st[0]}</span>${lineBadge}<span class="dim">${s.word_count} 字</span><span class="dim">${esc((s.updated_at || '').slice(5, 16))}</span>
@@ -654,6 +684,7 @@ function renderStoryList() {
           <button class="mini" title="删除这篇" onclick="event.stopPropagation();delStory(${s.id})">删</button>
         </span>
       </div>
+      <div class="s-prog" title="流水线进度：生成→质检·审核→入库→发布">${segs}</div>
     </div>`;
   }).join('') : '<p class="hint" style="padding:12px 4px">这个筛选下没有稿件</p>';
 }
@@ -672,20 +703,55 @@ async function cleanupEmpty() {
   if (empties.some(s => s.id === curId)) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; }
   loadStories();
 }
+/* 流水线：当前步骤索引（4 = 全部完成）；入库是瞬时动作，approved 直接点亮"发布" */
+const PIPE_STEPS = ['生成', '质检·审核', '入库', '发布'];
+const PIPE_STAGE = {generating: 0, generated: 1, approved: 3, published: 4};
+function renderPipe(s, qcRep, rvRep, quRep) {
+  let h = '<div class="pipe">';
+  if (s.status === 'rejected') {
+    h += PIPE_STEPS.map((n, i) =>
+      `<div class="p-step"><span class="p-dot">${i + 1}</span><span class="p-name">${n}</span></div>`
+    ).join('<span class="p-line"></span>');
+    h += '<span class="p-line"></span><div class="p-step rej"><span class="p-dot">!</span><span class="p-name">已废弃</span></div>';
+  } else {
+    const st = PIPE_STAGE[s.status] ?? 0;
+    h += PIPE_STEPS.map((n, i) => {
+      const cls = i < st ? ' done' : i === st ? ' cur' : '';
+      return `<div class="p-step${cls}"><span class="p-dot">${i < st ? '✓' : i + 1}</span><span class="p-name">${n}</span></div>`;
+    }).join('<span class="p-line"></span>');
+  }
+  h += '</div>';
+  const ev = [];
+  if (qcRep && qcRep.score != null) {
+    const c = qcRep.score >= 85 ? 'good' : qcRep.score < 70 ? 'bad' : '';
+    ev.push(`<span>本地质检 <b class="${c}">${qcRep.score}</b></span>`);
+  }
+  if (rvRep && rvRep.logic_score != null) {
+    ev.push(`<span>逻辑 <b class="${rvRep.logic_score >= 80 ? 'good' : ''}">${rvRep.logic_score}</b></span>`);
+    ev.push(`<span>抓人 <b class="${(rvRep.hook_score || 0) >= 80 ? 'good' : ''}">${rvRep.hook_score ?? '-'}</b></span>`);
+    const c = rvRep.ai_risk == null ? '' : rvRep.ai_risk >= 50 ? 'bad' : rvRep.ai_risk <= 30 ? 'good' : '';
+    ev.push(`<span>AI味 <b class="${c}">${rvRep.ai_risk ?? '-'}</b></span>`);
+  }
+  if (quRep && quRep.verdict) {
+    const good = quRep.verdict === '通过';
+    ev.push(`<span>质量环 <b class="${good ? 'good' : 'bad'}">${esc(quRep.verdict)}</b>·${quRep.rounds || 0}轮</span>`);
+  }
+  if (ev.length) h += `<div class="p-ev">${ev.join('')}</div>`;
+  $('#ed-pipe').innerHTML = h;
+}
 function renderEditorActions(s) {
   const G = {
     generating: [],
     generated: [
-      ['doQC()', '本地质检'], ['doReview()', 'AI逻辑审查'], ['doPolish()', '润色去AI味'],
-      ['approve()', '✓ 批准入库'], ['startQuality()', '下达意见·启动质量环', 'primary'],
-      ['rejectStory()', '废弃这篇'],
+      ['approve()', '✓ 批准入库', 'ed-cta'], ['doQC()', '本地质检'], ['doReview()', 'AI逻辑审查'], ['doPolish()', '润色去AI味'],
+      ['rejectStory()', '废弃这篇', 'ed-danger'],
     ],
     approved: [
-      ['doPublish()', '打开发布助手', 'primary'], ['markPublished()', '✓ 标记已发布'],
-      ['startQuality()', '下达意见·启动质量环'], ['rejectStory()', '废弃这篇'],
+      ['doPublish()', '打开发布助手', 'ed-cta'], ['markPublished()', '✓ 标记已发布'],
+      ['rejectStory()', '废弃这篇', 'ed-danger'],
     ],
     published: [['doPublish()', '重新填入草稿']],
-    rejected: [['delStory(curId)', '彻底删除']],
+    rejected: [['delStory(curId)', '彻底删除', 'ed-danger']],
   };
   $('#ed-actions').innerHTML = (G[s.status] || []).map(b =>
     `<button${b[2] ? ` class="${b[2]}"` : ''} onclick="${b[0]}">${b[1]}</button>`).join('');
@@ -758,9 +824,11 @@ async function openStory(id) {
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();
   $('#ed-cat').textContent = tMain ? '发布主分类：《' + tMain + '》' : '';
   renderEditorActions(s);
-  renderQC(_pj(s.qc_json));
-  renderReview(_pj(s.review_json));
-  renderQuality(_pj(s.quality_json));
+  const qcRep = _pj(s.qc_json), rvRep = _pj(s.review_json), quRep = _pj(s.quality_json);
+  renderPipe(s, qcRep, rvRep, quRep);
+  renderQC(qcRep);
+  renderReview(rvRep);
+  renderQuality(quRep);
   document.querySelectorAll('.s-item.sel').forEach(e => e.classList.remove('sel'));
   const el = document.querySelector(`.s-item[data-sid="${id}"]`);
   if (el) el.classList.add('sel');
