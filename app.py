@@ -442,13 +442,18 @@ def _auto_draft(ctx, page, s, log):
     while time.time() < deadline:
         for pg in ctx.pages:
             if "publish-short" in pg.url:
-                editor = pg
-                break
+                editor = pg  # 不提前 break，取最后一个＝最新打开的编辑页
         if editor is not None:
             break
         page.wait_for_timeout(1000)
     if editor is None:
         raise RuntimeError("未能进入短故事编辑页，请在浏览器里手动操作")
+    for pg in list(ctx.pages):  # 关掉残留的旧编辑页（可能卡着上次没关的弹窗）
+        if pg is not editor and "publish-short" in pg.url:
+            try:
+                pg.close()
+            except Exception:
+                pass
     editor.bring_to_front()
     editor.wait_for_load_state("domcontentloaded")
     _human_pause(editor, 1.5, 2.6)
