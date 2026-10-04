@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """番茄短故事工作台 - 桌面版后端服务，由 desktop.py 以线程方式启动。"""
 import json
+import random
 import threading
 import time
 import uuid
@@ -318,6 +319,35 @@ def start_quality(sid: int, b: NoteIn):
 MANAGE_URL = "https://fanqienovel.com/main/writer/short-manage"
 
 
+def _human_pause(pg, lo=0.4, hi=1.2):
+    """自然停顿：所有关键动作之间留真人节奏的随机间隔。"""
+    pg.wait_for_timeout(int(random.uniform(lo, hi) * 1000))
+
+
+def _human_click(pg, loc):
+    """带鼠标轨迹的点击：先移到附近，再分步移到目标随机点按下。
+    失败（取不到坐标等）退回普通点击。"""
+    try:
+        loc.scroll_into_view_if_needed(timeout=3000)
+        box = loc.bounding_box()
+        vp = pg.viewport_size
+        if box and vp:
+            tx = min(max(box["x"] + box["width"] * random.uniform(0.35, 0.65), 8),
+                     vp["width"] - 8)
+            ty = min(max(box["y"] + box["height"] * random.uniform(0.35, 0.65), 8),
+                     vp["height"] - 8)
+            pg.mouse.move(max(8, tx + random.uniform(-180, -60)),
+                          max(8, ty + random.uniform(40, 130)))
+            pg.wait_for_timeout(random.randint(90, 220))
+            pg.mouse.move(tx, ty, steps=random.randint(6, 14))
+            pg.wait_for_timeout(random.randint(60, 180))
+            pg.mouse.click(tx, ty)
+            return
+    except Exception:
+        pass
+    loc.click()
+
+
 def _visible(loc):
     try:
         return loc.count() > 0 and loc.first.is_visible()
@@ -384,7 +414,7 @@ def _auto_draft(ctx, page, s, log):
 
     # 2) 新建 → 编辑页（同页跳转或新标签都兼容）
     log("点击「新建短故事」…")
-    new_btn.click()
+    _human_click(page, new_btn)
     editor = None
     deadline = time.time() + 60
     while time.time() < deadline:
@@ -399,34 +429,38 @@ def _auto_draft(ctx, page, s, log):
         raise RuntimeError("未能进入短故事编辑页，请在浏览器里手动操作")
     editor.bring_to_front()
     editor.wait_for_load_state("domcontentloaded")
-    editor.wait_for_timeout(1500)
+    _human_pause(editor, 1.5, 2.6)
 
-    # 3) 标题
+    # 3) 标题：真人打字节奏（短文本逐字敲），粘贴是给正文的
     log("填入标题…")
     title_loc = (editor.locator(sel["title_input"]) if sel.get("title_input")
                  else editor.get_by_placeholder("短故事名称"))
     if not _visible(title_loc):
         title_loc = editor.locator(
             '[placeholder*="名称"], [aria-placeholder*="名称"], [data-placeholder*="名称"]')
-    title_loc.first.click()
-    title_loc.first.fill(s["title"])
+    _human_click(editor, title_loc.first)
+    _human_pause(editor, 0.3, 0.8)
+    editor.keyboard.type(s["title"], delay=random.randint(80, 140))
 
     # 4) 正文走剪贴板粘贴，兼容富文本编辑器
     log(f"粘贴正文（约 {s['word_count']} 字）…")
     body_loc = (editor.locator(sel["editor"]) if sel.get("editor")
                 else _pick_body(editor))
+    _human_pause(editor, 0.5, 1.2)
     import pyperclip
     pyperclip.copy(db.clean_text(s["body"]))
-    body_loc.first.click()
+    _human_click(editor, body_loc.first)
     editor.keyboard.press("Control+a")
+    _human_pause(editor, 0.2, 0.5)
     editor.keyboard.press("Control+v")
-    editor.wait_for_timeout(1500)
+    editor.wait_for_timeout(1500 + random.randint(0, 800))
 
     # 5) 存草稿
     log("点击「存草稿」…")
     save_btn = (editor.locator(sel["save_draft"]) if sel.get("save_draft")
                 else editor.get_by_text("存草稿"))
-    save_btn.first.click()
+    _human_pause(editor, 0.6, 1.4)
+    _human_click(editor, save_btn.first)
     saved = False
     for _ in range(20):
         if _visible(editor.get_by_text("已保存")):

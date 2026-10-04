@@ -673,3 +673,11 @@ ok41 = ("/writer/login" in asrc and "检测到登录页" in asrc
         and "独立配置，登录只保存在本机" in asrc
         and "独立配置，与你日常浏览器互不相通" in usrc)
 print("41) 发布助手登录等待修复:", ok41)
+
+# 42) 填稿拟人化：标题逐字打、正文粘贴、关键动作随机停顿+鼠标轨迹；无指纹伪造/验证码自动化
+ok42 = ("_human_pause" in asrc and "_human_click" in asrc
+        and "keyboard.type" in asrc and "delay=random.randint" in asrc
+        and "mouse.move" in asrc and "mouse.click" in asrc
+        and "Control+v" in asrc
+        and "fill(s[" not in asrc)
+print("42) 填稿拟人化节奏:", ok42)
