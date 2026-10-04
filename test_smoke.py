@@ -653,7 +653,7 @@ ok39 = ('id="ed-pipe"' in usrc and "function renderPipe" in usrc
         and "primary ed-cta" in usrc
         and "'ed-danger'" in usrc and "'ed-sub'" in usrc
         and "'AI审稿', 'ed-sub'" in usrc
-        and "s-prog" in usrc and "流水线：① 生成" in usrc
+        and "s-prog" not in usrc and "s-d" in usrc and "流水线：① 生成" in usrc
         and "startQuality(), '下达意见·启动质量环', 'primary'" not in usrc)
 print("39) 稿件页流程可视化:", ok39)
 

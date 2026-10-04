@@ -72,6 +72,7 @@ button.mini{padding:3px 10px;font-size:12px}
 .s-item .s-m{display:flex;align-items:center;gap:6px;font-size:11.5px;overflow:hidden}
 .s-item .s-m .dim{white-space:nowrap}
 .s-item .s-acts{margin-left:auto;display:flex;gap:4px;white-space:nowrap}
+.s-item .s-d{font-size:11px;color:var(--dim);margin-top:6px}
 /* 流程可视化：编辑器顶部流水线 + 质量证据 + 分层操作 */
 .pipe{display:flex;align-items:center;margin:2px 0 12px}
 .p-step{display:flex;align-items:center;gap:6px;min-width:0}
@@ -95,10 +96,6 @@ button.mini{padding:3px 10px;font-size:12px}
 .ed-danger{margin-left:auto;padding:6px 12px;font-size:12.5px;color:var(--red);background:none;border-color:transparent}
 .ed-danger:hover{border-color:var(--red);color:var(--red)}
 #ed-actions{gap:8px}
-.s-prog{display:flex;gap:3px;margin-top:7px}
-.s-prog i{height:3px;flex:1;border-radius:2px;background:var(--line)}
-.s-prog i.on{background:var(--acc)}
-.s-prog i.rj{background:var(--red)}
 /* 编辑器右侧：审查结果独立栏（列表 | 正文 | 报告 三列布局） */
 .s-reps{min-width:0;position:sticky;top:10px;display:flex;flex-direction:column}
 .s-reps-h{font-size:12px;color:var(--muted);margin:2px 2px 8px;font-weight:600;letter-spacing:1px}
@@ -687,20 +684,16 @@ function renderStoryList() {
     const st = STATUS[s.status] || [s.status, ''];
     const lineBadge = s.line === '悬疑' ? '' :
       `<span class="badge ${s.line === '严谨' ? 'b-rigor' : s.line === '二创' ? 'b-fan' : 'b-warm'}">${LINE_NAMES[s.line] || s.line}</span>`;
-    const stage = {generating: 1, generated: 2, approved: 3, published: 4}[s.status] || 0;
-    const segs = s.status === 'rejected'
-      ? '<i class="rj"></i><i class="rj"></i><i class="rj"></i><i class="rj"></i>'
-      : Array.from({length: 4}, (_, i) => `<i${i < stage ? ' class="on"' : ''}></i>`).join('');
     return `<div class="s-item${s.id === curId ? ' sel' : ''}" data-sid="${s.id}" onclick="openStory(${s.id})">
       <div class="s-t">${esc(s.title) || '(未命名)'}</div>
-      <div class="s-m"><span class="badge ${st[1]}">${st[0]}</span>${lineBadge}<span class="dim">${s.word_count} 字</span><span class="dim">${esc((s.updated_at || '').slice(5, 16))}</span>
+      <div class="s-m"><span class="badge ${st[1]}">${st[0]}</span>${lineBadge}
         <span class="s-acts">
           ${s.status === 'approved' ? `<button class="mini" title="打开发布助手" onclick="event.stopPropagation();quickPublish(${s.id})">发布</button>` : ''}
           ${s.word_count ? `<button class="mini" title="导出TXT" onclick="event.stopPropagation();window.open('/api/stories/${s.id}/export')">导出</button>` : ''}
           <button class="mini" title="删除这篇" onclick="event.stopPropagation();delStory(${s.id})">删</button>
         </span>
       </div>
-      <div class="s-prog" title="流水线进度：生成→质检·审核→入库→发布">${segs}</div>
+      <div class="s-d">${s.word_count} 字 · ${esc((s.updated_at || '').slice(5, 16))}</div>
     </div>`;
   }).join('') : '<p class="hint" style="padding:12px 4px">这个筛选下没有稿件</p>';
 }
