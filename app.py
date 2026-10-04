@@ -431,16 +431,44 @@ def _auto_draft(ctx, page, s, log):
     editor.wait_for_load_state("domcontentloaded")
     _human_pause(editor, 1.5, 2.6)
 
-    # 3) 标题：真人打字节奏（短文本逐字敲），粘贴是给正文的
+    # 3) 标题：直接对标题框逐字输入（不依赖全局焦点），回读校验，失败兜底 fill
     log("填入标题…")
     title_loc = (editor.locator(sel["title_input"]) if sel.get("title_input")
                  else editor.get_by_placeholder("短故事名称"))
     if not _visible(title_loc):
         title_loc = editor.locator(
             '[placeholder*="名称"], [aria-placeholder*="名称"], [data-placeholder*="名称"]')
-    _human_click(editor, title_loc.first)
+    tloc = title_loc.first
+    _human_click(editor, tloc)
     _human_pause(editor, 0.3, 0.8)
-    editor.keyboard.type(s["title"], delay=random.randint(80, 140))
+    try:
+        tloc.fill("")  # 清掉此前误落进来的字符，防重复
+    except Exception:
+        pass
+    try:
+        tloc.press_sequentially(s["title"], delay=random.randint(80, 140))
+    except Exception:
+        editor.keyboard.type(s["title"], delay=random.randint(80, 140))
+    got = ""
+    for _ in range(5):
+        try:
+            got = tloc.input_value()
+        except Exception:
+            try:
+                got = tloc.inner_text()
+            except Exception:
+                got = ""
+        if (got or "").strip():
+            break
+        editor.wait_for_timeout(400)
+    if s["title"] not in (got or ""):
+        try:
+            tloc.fill(s["title"])
+            log("标题逐字输入未落到标题框，已改用直接填充并校验")
+        except Exception:
+            log("⚠ 标题可能没有填上，请在浏览器里手动补一下")
+    else:
+        log("✓ 标题已填入并回读校验")
 
     # 4) 正文走剪贴板粘贴，兼容富文本编辑器
     log(f"粘贴正文（约 {s['word_count']} 字）…")
@@ -455,7 +483,68 @@ def _auto_draft(ctx, page, s, log):
     editor.keyboard.press("Control+v")
     editor.wait_for_timeout(1500 + random.randint(0, 800))
 
-    # 5) 存草稿
+    # 4.5) 封面：优先用平台自带的模板/随机封面入口（不代传图片）
+    cover_done = False
+    for key in ("随机封面", "模板封面", "智能封面", "生成封面", "一键生成", "换一批"):
+        try:
+            cand = editor.get_by_text(key)
+            if cand.count() and _visible(cand.first):
+                _human_click(editor, cand.first)
+                editor.wait_for_timeout(1500 + random.randint(0, 800))
+                cover_done = True
+                log(f"✓ 封面：已用平台自带「{key}」生成，可在页面里换")
+                break
+        except Exception:
+            continue
+    if not cover_done:
+        log("封面：页面上没找到自动生成入口，留给你手动选一张（工作台不代传图片）")
+
+    # 4.6) 勾选项：声明类（原创/承诺/同意…）自动勾；分类按风格线匹配，最多勾一项
+    line = (s.get("line") or "").strip()
+    line_map = {"悬疑": ["悬疑"], "温情": ["温情", "情感", "人间"],
+                "严谨": ["写实", "现实", "细腻"], "二创": ["二创", "同人", "改编"]}
+    line_keys = line_map.get(line, [line] if line else [])
+    decl_keys = ("原创", "承诺", "同意", "已阅读", "遵守")
+    checked, picked = 0, []
+    try:
+        labels = editor.locator("label")
+        for idx in range(labels.count()):
+            lbl = labels.nth(idx)
+            try:
+                txt = (lbl.inner_text() or "").strip().replace(chr(10), " ")
+            except Exception:
+                continue
+            if not txt or len(txt) > 60:
+                continue
+            try:
+                if lbl.locator("input:checked").count():
+                    continue
+            except Exception:
+                pass
+            hit = None
+            if any(k in txt for k in decl_keys):
+                hit = "声明"
+            elif line_keys and any(k in txt for k in line_keys):
+                hit = "分类"
+            if not hit:
+                continue
+            try:
+                _human_click(editor, lbl)
+                checked += 1
+                picked.append(f"{hit}·{txt[:16]}")
+                _human_pause(editor, 0.2, 0.5)
+                if hit == "分类":
+                    line_keys = []  # 分类一般单选，勾一项就收手
+            except Exception:
+                continue
+    except Exception:
+        pass
+    if checked:
+        log(f"✓ 自动勾选 {checked} 项：{'、'.join(picked[:4])}{'…' if len(picked) > 4 else ''}")
+    else:
+        log("勾选项：没匹配到可自动勾的声明/分类，留给你手动勾")
+
+    # 5) 存草稿（发布按钮永远留给用户人工点击）
     log("点击「存草稿」…")
     save_btn = (editor.locator(sel["save_draft"]) if sel.get("save_draft")
                 else editor.get_by_text("存草稿"))
@@ -467,7 +556,7 @@ def _auto_draft(ctx, page, s, log):
             saved = True
             break
         editor.wait_for_timeout(1000)
-    log("✓ 草稿已保存，请在浏览器里完成封面/分类并发布" if saved
+    log("✓ 草稿已保存：请在页面里确认封面/分类/选项，无误后自己点「发布」" if saved
         else "已点击存草稿（未捕捉到保存状态，请在浏览器里确认一下）")
 
 

@@ -7,6 +7,10 @@ taskkill /f /im FanqieWorkbench.exe >nul 2>&1
 rem 给文件锁释放留时间，避免备份复制到半开的库
 ping -n 3 127.0.0.1 >nul
 
+rem ---- 常驻发布助手浏览器锁着 browser_profile：只关助手（按命令行识别，不碰日常 Edge）----
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object {($_.Name -eq 'msedge.exe') -and ($_.CommandLine -like '*browser_profile*')} | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }" >nul 2>&1
+ping -n 3 127.0.0.1 >nul
+
 python -m pip install -q pyinstaller
 
 rem ---- checkpoint WAL：把 -wal 里已提交的数据合并进主库文件，主库自成一体 ----
@@ -24,7 +28,7 @@ if exist dist\FanqieWorkbench (
   for %%F in (config.json data.db data.db-shm data.db-wal sensitive.txt selectors.json app.log) do (
     if exist "dist\FanqieWorkbench\%%F" copy /y "dist\FanqieWorkbench\%%F" "%BK%\" >nul
   )
-  if exist "dist\FanqieWorkbench\browser_profile" robocopy "dist\FanqieWorkbench\browser_profile" "%BK%\browser_profile" /e /nfl /ndl /njh /njs >nul
+  if exist "dist\FanqieWorkbench\browser_profile" robocopy "dist\FanqieWorkbench\browser_profile" "%BK%\browser_profile" /e /nfl /ndl /njh /njs /r:1 /w:1 >nul
 )
 
 rem ---- 铁律：dist 里有库就必须先备份成功，否则绝不进入会清空 dist 的构建 ----
@@ -48,7 +52,7 @@ if exist "%BK%" (
   for %%F in (config.json data.db data.db-shm data.db-wal sensitive.txt selectors.json app.log) do (
     if exist "%BK%\%%F" copy /y "%BK%\%%F" "dist\FanqieWorkbench\" >nul
   )
-  if exist "%BK%\browser_profile" robocopy "%BK%\browser_profile" "dist\FanqieWorkbench\browser_profile" /e /nfl /ndl /njh /njs >nul
+  if exist "%BK%\browser_profile" robocopy "%BK%\browser_profile" "dist\FanqieWorkbench\browser_profile" /e /nfl /ndl /njh /njs /r:1 /w:1 >nul
 )
 
 rem ---- 恢复后校验：库必须存在且通过完整性检查 ----

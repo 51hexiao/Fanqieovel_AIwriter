@@ -676,10 +676,22 @@ ok41 = ("/writer/login" in asrc and "检测到登录页" in asrc
         and "独立配置，与你日常浏览器互不相通" in usrc)
 print("41) 发布助手登录等待+常驻复用:", ok41)
 
-# 42) 填稿拟人化：标题逐字打、正文粘贴、关键动作随机停顿+鼠标轨迹；无指纹伪造/验证码自动化
+# 42) 填稿拟人化：标题逐字打+回读校验、正文粘贴、随机停顿+鼠标轨迹
 ok42 = ("_human_pause" in asrc and "_human_click" in asrc
         and "keyboard.type" in asrc and "delay=random.randint" in asrc
         and "mouse.move" in asrc and "mouse.click" in asrc
         and "Control+v" in asrc
-        and "fill(s[" not in asrc)
+        and "press_sequentially" in asrc and "标题已填入并回读校验" in asrc
+        and "已改用直接填充并校验" in asrc)
 print("42) 填稿拟人化节奏:", ok42)
+
+# 43) 表单补全：封面模板入口自动点、声明/分类自动勾、发布按钮留人工
+ok43 = ("随机封面" in asrc and "模板封面" in asrc and "换一批" in asrc
+        and "decl_keys" in asrc and "原创" in asrc and "承诺" in asrc
+        and 'line_map' in asrc and "悬疑" in asrc
+        and "分类一般单选" in asrc
+        and "无误后自己点「发布」" in asrc
+        and "发布按钮永远留给用户人工点击" in asrc
+        and "选封面、勾上声明/分类选项" in usrc
+        and "发布按钮留给你本人点" in usrc)
+print("43) 封面勾选自动补全:", ok43)
