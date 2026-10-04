@@ -686,12 +686,13 @@ ok42 = ("_human_pause" in asrc and "_human_click" in asrc
 print("42) 填稿拟人化节奏:", ok42)
 
 # 43) 表单补全：封面模板入口自动点、声明/分类自动勾、发布按钮留人工
-ok43 = ("随机封面" in asrc and "模板封面" in asrc and "换一批" in asrc
-        and "decl_keys" in asrc and "原创" in asrc and "承诺" in asrc
-        and 'line_map' in asrc and "悬疑" in asrc
-        and "分类一般单选" in asrc
-        and "无误后自己点「发布」" in asrc
-        and "发布按钮永远留给用户人工点击" in asrc
-        and "选封面、勾上声明/分类选项" in usrc
-        and "发布按钮留给你本人点" in usrc)
+ok43 = ("封面制作" in asrc and "是否使用AI" in asrc
+        and "请选择作品分类" in asrc and "去设置" in asrc
+        and "我已阅读" in asrc and "auto_publish" in asrc
+        and "确认发布" in asrc and "如实申报" in asrc
+        and "_click_text" in asrc
+        and "已直接发布，工作台已自动标记为已发布" in asrc
+        and "请手动发布" in asrc
+        and "直接发布" in usrc and "auto_publish" in usrc
+        and "自动标记" in usrc)
 print("43) 封面勾选自动补全:", ok43)

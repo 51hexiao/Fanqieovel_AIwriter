@@ -369,6 +369,19 @@ def _pick_body(ed):
     return best if best is not None else ed.locator("textarea").first
 
 
+def _click_text(pg, txt, exact=True, pick="first"):
+    """按文字找可见元素并拟人点击；弹窗内容通常挂在 DOM 末尾，可用 pick=last。"""
+    loc = pg.get_by_text(txt, exact=exact)
+    loc = loc.first if pick == "first" else loc.last
+    try:
+        if _visible(loc):
+            _human_click(pg, loc)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _auto_draft(ctx, page, s, log):
     sel_path = paths.DATA_DIR / "selectors.json"
     sel = {}
@@ -483,28 +496,80 @@ def _auto_draft(ctx, page, s, log):
     editor.keyboard.press("Control+v")
     editor.wait_for_timeout(1500 + random.randint(0, 800))
 
-    # 4.5) 封面：优先用平台自带的模板/随机封面入口（不代传图片）
-    cover_done = False
-    for key in ("随机封面", "模板封面", "智能封面", "生成封面", "一键生成", "换一批"):
-        try:
-            cand = editor.get_by_text(key)
-            if cand.count() and _visible(cand.first):
-                _human_click(editor, cand.first)
-                editor.wait_for_timeout(1500 + random.randint(0, 800))
-                cover_done = True
-                log(f"✓ 封面：已用平台自带「{key}」生成，可在页面里换")
-                break
-        except Exception:
-            continue
-    if not cover_done:
-        log("封面：页面上没找到自动生成入口，留给你手动选一张（工作台不代传图片）")
-
-    # 4.6) 勾选项：声明类（原创/承诺/同意…）自动勾；分类按风格线匹配，最多勾一项
+    import re as _re
     line = (s.get("line") or "").strip()
-    line_map = {"悬疑": ["悬疑"], "温情": ["温情", "情感", "人间"],
-                "严谨": ["写实", "现实", "细腻"], "二创": ["二创", "同人", "改编"]}
-    line_keys = line_map.get(line, [line] if line else [])
-    decl_keys = ("原创", "承诺", "同意", "已阅读", "遵守")
+    cat_map = {"悬疑": ["悬疑", "推理", "灵异"], "温情": ["情感", "温情", "家庭", "人间"],
+               "严谨": ["现实", "都市", "写实"], "二创": ["同人", "衍生", "二创"]}
+    cat_keys = cat_map.get(line, [line] if line else [])
+
+    # 4.5) 封面：点「封面制作」，在弹窗里挑模板/随机并确认（不代传图片）
+    log("封面：尝试用「封面制作」自动生成…")
+    if _click_text(editor, "封面制作", exact=False):
+        editor.wait_for_timeout(1800 + random.randint(0, 900))
+        for key in ("随机", "模板", "使用模板", "生成"):
+            if _click_text(editor, key, exact=False, pick="last"):
+                editor.wait_for_timeout(1500 + random.randint(0, 800))
+                break
+        confirmed = False
+        for key in ("确定", "使用封面", "保存", "完成"):
+            if _click_text(editor, key, exact=True, pick="last"):
+                editor.wait_for_timeout(1200)
+                confirmed = True
+                break
+        if confirmed:
+            log("✓ 封面已用「封面制作」生成（不满意可在页面里重选）")
+        else:
+            editor.keyboard.press("Escape")
+            log("⚠ 封面弹窗未能自动确认，已关闭，请手动选一张封面")
+    else:
+        log("⚠ 未找到「封面制作」入口，请手动设置封面")
+
+    # 4.6) 是否使用AI：如实选「是」（稿子由 AI 生成，选「否」属虚假申报，程序不做）
+    try:
+        row = editor.locator(
+            "xpath=//*[normalize-space(text())='是否使用AI']"
+            "/ancestor::*[.//*[normalize-space(text())='是'] and .//*[normalize-space(text())='否']][1]")
+        yes = row.get_by_text("是", exact=True).last
+        if _visible(yes):
+            _human_click(editor, yes)
+            log("AI 声明：已选「是」（如实申报）")
+        else:
+            log("⚠ 未定位到 AI 声明的「是」，请手动点一下")
+    except Exception:
+        log("⚠ AI 声明未自动选择，请手动点「是」")
+    editor.wait_for_timeout(400 + random.randint(0, 400))
+
+    # 4.7) 作品分类：点开下拉，按风格线选主分类（最多可手动补到 8 个）
+    picked_cat = None
+    try:
+        dd = editor.get_by_text("请选择作品分类").first
+        if _visible(dd):
+            _human_click(editor, dd)
+            editor.wait_for_timeout(900 + random.randint(0, 500))
+            for kw in cat_keys:
+                opt = editor.get_by_text(kw, exact=True)
+                if not opt.count():
+                    opt = editor.get_by_text(kw, exact=False)
+                if opt.count() and _visible(opt.last):
+                    _human_click(editor, opt.last)
+                    picked_cat = kw
+                    editor.wait_for_timeout(700)
+                    break
+            if picked_cat:
+                for key in ("确定", "下一步"):
+                    if _click_text(editor, key, exact=True, pick="last"):
+                        editor.wait_for_timeout(600)
+                        break
+                log(f"✓ 主分类已选：{picked_cat}（想多加分类可手动补）")
+            else:
+                log("⚠ 分类下拉里没匹配到风格线关键词，请手动选主分类")
+        else:
+            log("⚠ 未找到「请选择作品分类」入口，请手动选")
+    except Exception:
+        log("⚠ 作品分类未自动选择，请手动选")
+
+    # 4.8) 勾选声明类（发布协议在 4.10 单独处理，避免重复点击反选）
+    decl_keys = ("原创", "承诺", "同意", "遵守")
     checked, picked = 0, []
     try:
         labels = editor.locator("label")
@@ -521,30 +586,130 @@ def _auto_draft(ctx, page, s, log):
                     continue
             except Exception:
                 pass
-            hit = None
-            if any(k in txt for k in decl_keys):
-                hit = "声明"
-            elif line_keys and any(k in txt for k in line_keys):
-                hit = "分类"
-            if not hit:
+            if not any(k in txt for k in decl_keys):
                 continue
             try:
                 _human_click(editor, lbl)
                 checked += 1
-                picked.append(f"{hit}·{txt[:16]}")
+                picked.append(txt[:16])
                 _human_pause(editor, 0.2, 0.5)
-                if hit == "分类":
-                    line_keys = []  # 分类一般单选，勾一项就收手
             except Exception:
                 continue
     except Exception:
         pass
     if checked:
         log(f"✓ 自动勾选 {checked} 项：{'、'.join(picked[:4])}{'…' if len(picked) > 4 else ''}")
-    else:
-        log("勾选项：没匹配到可自动勾的声明/分类，留给你手动勾")
 
-    # 5) 存草稿（发布按钮永远留给用户人工点击）
+    # 4.9) 试读比例：去设置 → 选一档 → 确定（结构未知则 Esc 收场，不碍发布）
+    try:
+        tr = editor.get_by_text("去设置", exact=True).first
+        if _visible(tr):
+            _human_click(editor, tr)
+            editor.wait_for_timeout(1200 + random.randint(0, 600))
+            set_pct = None
+            for pct in ("50%", "30%", "20%"):
+                cand = editor.get_by_text(pct, exact=True)
+                if cand.count() and _visible(cand.last):
+                    _human_click(editor, cand.last)
+                    editor.wait_for_timeout(500)
+                    set_pct = pct
+                    break
+            confirmed = False
+            if set_pct:
+                for key in ("确定", "保存"):
+                    if _click_text(editor, key, exact=True, pick="last"):
+                        confirmed = True
+                        editor.wait_for_timeout(600)
+                        break
+            if set_pct and confirmed:
+                log(f"✓ 试读比例已设为 {set_pct}（可手动改）")
+            else:
+                editor.keyboard.press("Escape")
+                log("试读比例未自动设置（结构未知），需要的话手动设一下")
+    except Exception:
+        pass
+
+    # 4.10) 发布协议：勾「我已阅读…」（避开「发布事项」链接文字，不点开文档）
+    try:
+        row = editor.locator("xpath=//*[contains(normalize-space(text()),'我已阅读')]").last
+        box = row.locator(
+            "xpath=ancestor::*[.//input[@type='checkbox']][1]//input[@type='checkbox']").first
+        if box.count() and box.is_checked():
+            log("✓ 发布协议已是勾选状态")
+        elif row.count() and _visible(row):
+            _human_click(editor, row)
+            log("✓ 发布协议已勾选")
+        else:
+            log("⚠ 未找到发布协议勾选行，请手动勾")
+    except Exception:
+        log("⚠ 发布协议未自动勾选，请手动勾")
+
+    # 5) 发布（auto_publish=false 则退回只存草稿）＋确认弹窗＋结果核对
+    cfg = {}
+    try:
+        cfg = json.loads((paths.DATA_DIR / "config.json").read_text(encoding="utf-8"))
+    except Exception:
+        cfg = {}
+    if cfg.get("auto_publish", True):
+        log("点击「发布」…")
+        pub = editor.get_by_role(
+            "button", name=_re.compile(r"^(发布|发布作品|立即发布|提交发布|提交)$")).first
+        clicked = False
+        try:
+            if _visible(pub):
+                _human_click(editor, pub)
+                clicked = True
+        except Exception:
+            clicked = False
+        if not clicked:
+            for el in editor.locator("button, [role='button']").all():
+                try:
+                    t = (el.inner_text() or "").strip()
+                except Exception:
+                    continue
+                if t not in ("发布", "发布作品", "立即发布", "提交发布", "提交"):
+                    continue
+                if not _visible(el):
+                    continue
+                try:
+                    lab = el.evaluate(
+                        "el => { const l = el.closest('label'); return l ? l.innerText : ''; }")
+                except Exception:
+                    lab = ""
+                if "阅读" in lab or "协议" in lab:
+                    continue
+                _human_click(editor, el)
+                clicked = True
+                break
+        if not clicked:
+            log("⚠ 未找到「发布」按钮，已改点「存草稿」，请手动发布")
+            _click_text(editor, "存草稿", exact=False)
+            return
+        editor.wait_for_timeout(1000 + random.randint(0, 600))
+        for key in ("确定", "确认发布", "确认"):
+            if _click_text(editor, key, exact=True, pick="last"):
+                editor.wait_for_timeout(800)
+                break
+        published = False
+        for _ in range(15):
+            for sig in ("发布成功", "已发布", "审核中", "发布中"):
+                try:
+                    if editor.get_by_text(sig).count():
+                        published = True
+                        break
+                except Exception:
+                    pass
+            if published:
+                break
+            editor.wait_for_timeout(1000)
+        if published:
+            db.update_story(s["id"], status="published", published_at=db.now())
+            log("✓ 已直接发布，工作台已自动标记为已发布")
+        else:
+            log("已点击发布但未捕捉到成功状态：请在浏览器里确认；"
+                "成功的话回工作台点「标记已发布」留档")
+        return
+
     log("点击「存草稿」…")
     save_btn = (editor.locator(sel["save_draft"]) if sel.get("save_draft")
                 else editor.get_by_text("存草稿"))
