@@ -228,6 +228,23 @@ def story_insight_messages(items):
             {"role": "user", "content": user}]
 
 
+def story_rule_messages(items):
+    """把一批拆解提炼成跨题材通用的爆款写法规则。"""
+    lines = "\n".join(
+        f"- [{i.get('cats', '')}] {i.get('title', '')}：钩子={i.get('hook', '')}；"
+        f"特色={i.get('style', '')}；仿写={i.get('imitate', '')}"
+        for i in items)
+    user = """下面是本周番茄热门榜故事的结构拆解（已逐条拆好）。请提炼它们共同的爆款规律，输出可直接执行的写法规则，只输出JSON：
+{"rules":["规则1（一句话，具体到能照做）","规则2","规则3"]}
+
+要求：共5到8条，覆盖开篇钩子、断章位置、节奏推进、情绪/爽点处理、反转铺垫这几类；每条必须具体到能照做（像"开篇前三行必须抛出反常，禁止背景铺垫"），禁止"要写好开头"这类空话；规则要跨题材通用（不绑定某个具体题材），供写新故事时逐条遵守。
+
+拆解数据：
+""" + lines
+    return [{"role": "system", "content": SYS_BENCH},
+            {"role": "user", "content": user}]
+
+
 def topic_messages(combos, recent, line="悬疑", bench_titles=None,
                    hot_words=None, picks=None, hot_stories=None):
     import pools
@@ -525,12 +542,19 @@ def title_messages(topic, outline, line="悬疑"):
             {"role": "user", "content": user}]
 
 
-def outline_messages(topic, bench_openings=None):
+def outline_messages(topic, bench_openings=None, market_rules=None):
     line = topic.get("line", "悬疑")
     bench_block = ""
     if bench_openings:
         bench_block = ("\n【同赛道爆款开篇写法参考：只学结构，禁止抄情节】\n"
                        + "\n".join("- " + o for o in bench_openings[:3])
+                       + "\n")
+    rules_block = ""
+    if market_rules:
+        rules_block = ("\n【本周爆款写法规则（热门榜AI拆解提炼，大纲逐条落实："
+                       "开篇怎么抓人、断章停在哪、节奏与反转怎么排）】\n"
+                       + "\n".join(f"{i}. {r}"
+                                   for i, r in enumerate(market_rules[:8], 1))
                        + "\n")
     if line == "温情":
         user = f"""围绕下面的选题，写一份可直接执行的写作大纲。
@@ -540,7 +564,7 @@ def outline_messages(topic, bench_openings=None):
 情感内核：{topic.get('social', '')}
 差异点：{topic.get('diff', '')}
 组合标签（番茄官方分类，故事须符合这些标签的读者预期）：{topic.get('combo', '')}
-{bench_block}
+{bench_block}{rules_block}
 输出JSON（不要多余文字）：
 {{
  "characters": [{{"name":"姓名","role":"身份","secret":"没说出口的心事或隐瞒的事"}}],
@@ -573,7 +597,7 @@ def outline_messages(topic, bench_openings=None):
 社会议题：{topic.get('social', '')}
 差异点：{topic.get('diff', '')}
 组合标签（番茄官方分类，故事须符合这些标签的读者预期）：{topic.get('combo', '')}
-{bench_block}
+{bench_block}{rules_block}
 输出JSON（不要多余文字）：
 {{
  "characters": [{{"name":"姓名","role":"身份","secret":"隐藏动机或秘密"}}],
@@ -605,7 +629,7 @@ def outline_messages(topic, bench_openings=None):
 社会议题：{topic.get('social', '')}
 差异点：{topic.get('diff', '')}
 组合标签（番茄官方分类，故事须符合这些标签的读者预期）：{topic.get('combo', '')}
-{bench_block}
+{bench_block}{rules_block}
 输出JSON（不要多余文字）：
 {{
  "characters": [{{"name":"姓名","role":"身份","secret":"隐藏动机或秘密"}}],
@@ -667,7 +691,7 @@ def outline_messages(topic, bench_openings=None):
             {"role": "user", "content": user}]
 
 
-def section_messages(story, no, total, hooks=None):
+def section_messages(story, no, total, hooks=None, market_rules=None):
     line = story.get("line") or (story.get("topic") or {}).get("line", "悬疑")
     warm = line == "温情"
     rigor = line == "严谨"
@@ -721,6 +745,10 @@ def section_messages(story, no, total, hooks=None):
                       "钩子手法，仿写它的手法与信息密度——多快抛出反常、多少留白，"
                       "禁止抄情节、句词、人名）】\n"
                       + "\n".join("- " + h[:130] for h in hooks[:4]) + "\n")
+    rules_block = ""
+    if market_rules:
+        rules_block = ("\n【本周爆款写法规则（热门榜AI拆解提炼，本节逐条执行）】\n"
+                       + "\n".join("- " + r for r in market_rules[:8]) + "\n")
     if line == "二创":
         closing = """直接输出本节正文（不要节名、不要解释），保持二创铁律与爽感法则。若为第一节：第一段直接砸出反常的处境（穿越落点、觉醒瞬间或领盒饭前的最后一天），原作设定只在剧情里自然带出，禁止说明书式科普，禁止铺垫开场。若非第一节：第一段必须直接接住上一节的断章（打脸落地、或冲突加压），禁止换个场景缓启动。每写一段自查一次：引用的原作元素符合原作设定吗？主角有没有夺原作主角的高光？这段删掉，冲突、爽点或情怀会不会少一层？不会就删掉。爽点出现时写得干脆利落，给足分量。写完正文后，另起一行以「摘要：」开头，用不超过60字概括本节内容（仅供后续续写参考，不属于正文）。"""
     elif rigor:
@@ -740,7 +768,7 @@ def section_messages(story, no, total, hooks=None):
 {prev_s}
 
 【线索清单】
-{clues}{extra}{hook_block}
+{clues}{extra}{rules_block}{hook_block}
 
 【本节情节点】
 {beats}
@@ -760,7 +788,8 @@ def section_messages(story, no, total, hooks=None):
             {"role": "user", "content": user}]
 
 
-def review_messages(title, body, line="悬疑", outline_note=None):
+def review_messages(title, body, line="悬疑", outline_note=None,
+                    market_rules=None):
     if line == "严谨":
         sysmsg = SYS_REVIEW_RIGOR
         checks = """- 逻辑硬伤（logic_score 从严评，本线生死线）：设定规则前后是否一致——凡出现规则被违反、凭空冒出新能力/新规则救场，把位置写进 issues（type 填"逻辑"）；主角破局用的关键线索是否此前都给过读者——凡天降证据、巧合破案，写进 issues（type 填"逻辑"）；每个反转之前正文里是否已有至少两处伏笔——不足则写进 issues（type 填"逻辑"）；反派与机制是否降智（对手行动在其信息范围内是否合理、副本死亡是否有机制原因、有无剧情杀）；
@@ -803,6 +832,11 @@ def review_messages(title, body, line="悬疑", outline_note=None):
 - 是否有平台违规风险（暴力过程、真实人物信息、未成年人相关）；
 - 模板腔与惯性复用：是否连续使用同构句式（"他不知道……他更不知道……""不是……而是…"连用、"第一……第二……第三……"）；高频反应是否反复出现（"我笑了""脸色一白""全场死寂""齐刷刷看向我""手抖了一下"）；同一情绪反应是否连续复用。发现写进 issues（type 填"文风"）；
 - AI味：总结腔、排比滥用、段落过碎。没有问题就给空数组。"""
+    if market_rules:
+        checks += ("\n- 本周爆款写法规则对照（热门榜AI拆解提炼，逐条核对；"
+                   "违反的写进 issues，type 按问题填'节奏'或'钩子'）：\n"
+                   + "\n".join(f"  {i}. {r}"
+                               for i, r in enumerate(market_rules[:8], 1)))
     user = f"""请审稿并只输出JSON：
 {{"logic_score":0到100的整数,"hook_score":0到100的整数,"ai_risk":0到100的整数,
 "issues":[{{"type":"时间线/人物/动机/底牌/节奏/人设/平台风险/其他","detail":"问题描述","where":"引用原文不超过30字"}}]}}

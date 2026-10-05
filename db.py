@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS market_picks(
   board TEXT DEFAULT '', kind TEXT DEFAULT '',
   captured_at TEXT
 );
+CREATE TABLE IF NOT EXISTS market_rules(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule TEXT, captured_at TEXT
+);
 CREATE TABLE IF NOT EXISTS bench_reports(
   line TEXT PRIMARY KEY, data_json TEXT DEFAULT '', created_at TEXT
 );
@@ -305,6 +309,22 @@ def save_story_insights(pairs):
             "UPDATE market_stories SET insights=? WHERE title=?",
             [(ins, title) for title, ins in pairs])
         return len(pairs)
+
+
+def save_market_rules(rules):
+    """整批替换本周爆款写法规则快照。"""
+    ts = now()
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM market_rules")
+        c.executemany("INSERT INTO market_rules(rule,captured_at) VALUES(?,?)",
+                      [(str(r), ts) for r in rules])
+        return len(rules)
+
+
+def latest_market_rules(limit=8):
+    with _lock, _conn() as c:
+        return [r[0] for r in c.execute(
+            "SELECT rule FROM market_rules ORDER BY id LIMIT ?", (limit,))]
 
 
 def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):

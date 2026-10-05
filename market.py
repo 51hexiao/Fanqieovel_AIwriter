@@ -214,6 +214,39 @@ def analyze_stories(log=print):
     return len(pairs)
 
 
+def distill_rules(log=print):
+    """把拆解结果提炼成 5~8 条本周爆款写法规则，供出题/大纲/写作/审稿注入。"""
+    items = []
+    for s in db.latest_market_stories(120):
+        ins = s.get("insights") or ""
+        if not ins:
+            continue
+        try:
+            ij = json.loads(ins)
+        except Exception:
+            continue
+        if isinstance(ij, dict) and any(str(ij.get(k) or "").strip()
+                                        for k in ("hook", "style", "imitate")):
+            ij["title"], ij["cats"] = s["title"], s.get("cats", "")
+            items.append(ij)
+    if len(items) < 3:
+        log("⚠ 可用的拆解不足 3 条，跳过规则提炼")
+        return 0
+    import llm
+    import prompts
+    log(f"提炼本周爆款写法规则（基于 {len(items)} 条拆解）…")
+    data = llm.ask_json(prompts.story_rule_messages(items),
+                        log=log, need_keys=["rules"],
+                        temperature=0.3, max_tokens=1200)
+    rules = [str(r).strip() for r in (data.get("rules") or [])
+             if str(r).strip()][:8]
+    if not rules:
+        raise ValueError("提炼出的规则为空")
+    db.save_market_rules(rules)
+    log(f"✓ 爆款写法规则 {len(rules)} 条，已入库并将注入全流程")
+    return len(rules)
+
+
 def scrape(log=print):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -306,7 +339,13 @@ def scrape(log=print):
         n_ins = analyze_stories(log)
     except Exception as exc:
         log("⚠ AI 拆解失败（不影响榜单数据）：" + str(exc))
+    n_rules = 0
+    if n_ins:
+        try:
+            n_rules = distill_rules(log)
+        except Exception as exc:
+            log("⚠ 规则提炼失败（沿用上一次规则）：" + str(exc))
     log(f"✓ 已入库：热词 {len(rows)} 个，主编力签 {len(picks)} 条，"
-        f"热门故事 {len(stories)} 条（AI 拆解 {n_ins} 条）")
+        f"热门故事 {len(stories)} 条（AI 拆解 {n_ins} 条，爆款规则 {n_rules} 条）")
     return {"words": len(rows), "picks": len(picks), "stories": len(stories),
-            "insights": n_ins}
+            "insights": n_ins, "rules": n_rules}

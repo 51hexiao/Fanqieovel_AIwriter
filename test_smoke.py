@@ -818,3 +818,26 @@ ok47 = (callable(prompts.story_insight_messages)
         and "钩子手法" in m47h and "反常行为开场" in m47h
         and "insights" in usrc and "insightsLine" in usrc)
 print("47) 榜单故事AI拆解:", ok47)
+
+# 48) 风向融入全流程：爆款规则提炼入库，自动注入大纲/各节写作/审稿
+db.save_market_rules(["开篇前三行必须抛出反常，禁止背景铺垫", "断章停在底牌揭晓前一瞬"])
+_rback = db.latest_market_rules()
+o48 = prompts.outline_messages({"title": "T", "line": "悬疑"},
+                               market_rules=_rback)[1]["content"]
+s48 = prompts.section_messages(
+    {"title": "T", "line": "悬疑",
+     "outline": {"sections": [{"no": 2, "beats": ["b"]}],
+                 "characters": [], "clues": []}, "summaries": ["x"]},
+    2, 5, market_rules=_rback)[1]["content"]
+r48 = prompts.review_messages("T", "正文", line="悬疑",
+                              market_rules=_rback)[1]["content"]
+ok48 = (callable(prompts.story_rule_messages)
+        and len(_rback) == 2 and "开篇前三行必须抛出反常" in _rback[0]
+        and "爆款写法规则" in o48 and "断章停在底牌揭晓前一瞬" in o48
+        and "爆款写法规则" in s48 and "开篇前三行必须抛出反常" in s48
+        and "爆款写法规则" in r48 and "断章停在底牌揭晓前一瞬" in r48
+        and "distill_rules" in msrc and "save_market_rules" in msrc
+        and "latest_market_rules" in gsrc
+        and '"rules"' in asrc and "爆款写法规则" in usrc)
+print("48) 爆款规则融入全流程:", ok48)
+db.save_market_rules([])

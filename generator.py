@@ -135,9 +135,13 @@ def start_story(topic, log=print, sec_words=0):
         log(f"本篇风格变体：{vr['key']}（{vr['name']}）")
     openings = [b["opening"] for b in db.bench_examples(line, 3)
                 if b.get("opening")]
+    mkt_rules = db.latest_market_rules() or None
+    if mkt_rules:
+        log("注入爆款写法规则 ×" + str(len(mkt_rules)))
     log("设计大纲与人物…")
     data = llm.ask_json(prompts.outline_messages(topic,
-                                            bench_openings=openings or None),
+                                            bench_openings=openings or None,
+                                            market_rules=mkt_rules),
                    temperature=0.8, max_tokens=3000, log=log, need_keys=["sections"])
     outline = data
     new_title = (topic.get("title") or "").strip()
@@ -181,7 +185,8 @@ def start_story(topic, log=print, sec_words=0):
             hooks = _hs[:4] or None
             if hooks:
                 log("注入热门开篇样板 ×" + str(len(hooks)))
-        raw = llm.chat(prompts.section_messages(story, i, total, hooks=hooks),
+        raw = llm.chat(prompts.section_messages(story, i, total, hooks=hooks,
+                                                market_rules=mkt_rules),
                        temperature=llm.cfg("temperature_write", 0.85),
                        max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
         m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
@@ -203,7 +208,8 @@ def review_story(sid, log=print):
     price = str((story.get("outline") or {}).get("price_paid") or "").strip()
     note = f"胜利成本（大纲 price_paid）：{price}" if price else None
     data = llm.ask_json(prompts.review_messages(story["title"], story["body"], line,
-                                           outline_note=note),
+                                           outline_note=note,
+                                           market_rules=db.latest_market_rules() or None),
                    temperature=0.3, max_tokens=2000, log=log, need_keys=["logic_score", "hook_score", "ai_risk", "issues"])
     db.update_story(sid, review_json=json.dumps(data, ensure_ascii=False))
     log("审稿完成")

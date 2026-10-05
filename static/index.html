@@ -248,11 +248,11 @@ details.t-more .t-meta{margin-bottom:0}
 <main>
 
 <section id="tab-topics">
-  <div class="crumb">工作流：① 看市场风向 → ② 出选题（自动贴靠热词/力签/热榜）→ ③ 选题库勾选 → 批量写稿。用过的自动标记，写过的题材和人名自动避开。</div>
+  <div class="crumb">工作流：① 看市场风向 → ② 出选题（自动贴靠热词/力签/热榜）→ ③ 选题库勾选 → 批量写稿。风向数据自动融入出题、大纲、写作、审稿，用过的自动标记，写过的题材和人名自动避开。</div>
 
   <div class="step-h">
     <span class="step-n">1</span><b>今日市场风向</b>
-    <span class="hint">读者在求什么 · 官方在要什么 · 什么正在爆——点任意条目围绕它出题</span>
+    <span class="hint">读者在求什么 · 官方在要什么 · 什么正在爆——抓取后自动拆解提炼成写法规则，融入出题→大纲→写作→审稿</span>
     <span style="flex:1"></span>
     <span class="hint" id="market-time"></span>
     <button class="fbtn" onclick="scrapeMarket()" title="用发布助手浏览器打开作家后台灵感页抓取（浏览器需登录过番茄）">↻ 抓取</button>
@@ -711,8 +711,17 @@ async function loadMarket() {
     $('#mk-c-words').textContent = (m.words || []).length || '';
     $('#mk-c-picks').textContent = (m.picks || []).length || '';
     $('#mk-c-stories').textContent = rows.length || '';
-    $('#market-stories').innerHTML = rows.length
-      ? '<div style="margin-top:8px"><b style="font-size:12.5px">热门故事榜·AI拆解'
+    const rl = m.rules || [];
+    $('#market-stories').innerHTML = (rows.length || rl.length)
+      ? '<div style="margin-top:8px">'
+        + (rl.length
+           ? '<div style="padding:7px 10px;border:1px dashed var(--acc);border-radius:8px;margin-bottom:6px">'
+             + '<b style="font-size:12px">📌 本周爆款写法规则 ×' + rl.length
+             + '（已自动融入：出题 → 大纲 → 写作 → 审稿）</b>'
+             + '<div class="hint" style="margin-top:3px;line-height:1.7">'
+             + rl.map(r => '<div>· ' + esc(r) + '</div>').join('') + '</div></div>'
+           : '')
+        + '<b style="font-size:12.5px">热门故事榜·AI拆解'
         + '（🧠=钩子/特色/仿写 · 点行=按它的题材组合出题）</b>'
         + rows.slice(0, 12).map(s =>
           `<div class="mrow" title="${esc(s.brief || s.title)}"`
