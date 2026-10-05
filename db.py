@@ -210,6 +210,22 @@ def append_section(sid, no, text, summary):
              body, cjk_len(body), now(), sid))
 
 
+def rebuild_body(sid):
+    """从 sections_json 重建正文——编辑器旧快照覆盖丢稿后的自救。"""
+    with _lock, _conn() as c:
+        row = c.execute("SELECT sections_json FROM stories WHERE id=?",
+                        (sid,)).fetchone()
+        if not row:
+            return 0
+        secs = json.loads(row["sections_json"] or "[]")
+        if not secs:
+            return 0
+        body = _assemble(secs)
+        c.execute("UPDATE stories SET body=?, word_count=?, updated_at=? WHERE id=?",
+                  (body, cjk_len(body), now(), sid))
+        return len(body)
+
+
 def delete_story(sid):
     with _lock, _conn() as c:
         c.execute("DELETE FROM stories WHERE id=?", (sid,))

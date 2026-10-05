@@ -884,3 +884,9 @@ ok52 = ("saveStory()" in usrc and "doExport()" in usrc
         and "note=note" in asrc and "polish_messages" not in gsrc
         and "没有可执行的意见" in gsrc and "没有可执行的意见" in usrc)
 print("52) 步骤条即操作:", ok52)
+
+# 53) 防旧快照覆盖：生成中锁定编辑框+PUT拒改；rebuild_body 可从分节重建正文
+ok53 = ("rebuild_body" in dbsrc and '/api/stories/{sid}/rebuild' in asrc
+        and "生成中不接受正文修改" in asrc
+        and "readOnly = s.status === 'generating'" in usrc)
+print("53) 防旧快照覆盖丢稿:", ok53)

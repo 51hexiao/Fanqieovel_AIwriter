@@ -1021,6 +1021,8 @@ async function openStory(id) {
   $('#ed-title').value = s.title;
   $('#ed-body').value = s.body;
   $('#ed-note').value = s.note || '';
+  $('#ed-title').readOnly = s.status === 'generating';
+  $('#ed-body').readOnly = s.status === 'generating';
   const tierName = (s.sec_words || 0) >= 2500 ? '特长' : (s.sec_words || 0) >= 1800 ? '加长' : '';
   $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${tierName ? ' ▏' + tierName + '档' : ''}${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();

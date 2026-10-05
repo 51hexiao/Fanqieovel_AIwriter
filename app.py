@@ -273,8 +273,11 @@ def get_story(sid: int):
 
 @app.put("/api/stories/{sid}")
 def edit_story(sid: int, e: StoryEdit):
-    if not db.get_story(sid):
+    s = db.get_story(sid)
+    if not s:
         raise HTTPException(404, "稿件不存在")
+    if s["status"] == "generating" and e.body:
+        raise HTTPException(409, "生成中不接受正文修改：等流水线①变绿勾再改，避免旧快照覆盖新稿")
     fields = {}
     if e.title:
         fields["title"] = e.title
@@ -285,6 +288,17 @@ def edit_story(sid: int, e: StoryEdit):
     if fields:
         db.update_story(sid, **fields)
     return db.get_story(sid)
+
+
+@app.post("/api/stories/{sid}/rebuild")
+def rebuild_story(sid: int):
+    if not db.get_story(sid):
+        raise HTTPException(404, "稿件不存在")
+    n = db.rebuild_body(sid)
+    if not n:
+        raise HTTPException(400, "没有分节内容可重建")
+    s = db.get_story(sid)
+    return {"ok": True, "chars": n, "word_count": s["word_count"]}
 
 
 @app.delete("/api/stories/{sid}")
