@@ -311,10 +311,11 @@ def run_review(sid: int):
 
 
 @app.post("/api/stories/{sid}/polish")
-def run_polish(sid: int):
+def run_polish(sid: int, payload: Optional[dict] = None):
     if not db.get_story(sid):
         raise HTTPException(404, "稿件不存在")
-    return start_task("polish", lambda log: generator.polish_story(sid, log))
+    note = ((payload or {}).get("note") or "").strip()
+    return start_task("polish", lambda log: generator.polish_story(sid, log, note=note))
 
 
 @app.post("/api/stories/{sid}/approve")

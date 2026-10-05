@@ -649,7 +649,7 @@ print("38) 字数档位:", ok38)
 
 # 39) 稿件页流程可视化：步骤即可按钮（点步骤自动执行），底部按钮排已删
 ok39 = ('id="ed-pipe"' in usrc and "function renderPipe" in usrc
-        and "PIPE_STEPS = ['生成', '质检', '审稿', '润色', '入库', '发布']" in usrc
+        and "PIPE_STEPS = ['生成', '质检', '审稿', '修稿', '入库', '发布']" in usrc
         and "PIPE_ACTS" in usrc and "PIPE_TIPS" in usrc
         and "renderPipe(s, qcRep, rvRep, quRep)" in usrc
         and "ed-actions" not in usrc and "ed-cta" not in usrc
@@ -871,7 +871,7 @@ ok51 = ("_edPoll" in usrc and "stopEdPoll" in usrc
         and usrc.count("stopEdPoll()") >= 4)
 print("51) 编辑器生成中自动刷新:", ok51)
 
-# 52) 步骤条即操作：点步骤自动执行；润色完成有落库标记；废弃/标记已发布各就各位
+# 52) 步骤条即操作：点步骤自动执行；修稿=按三方意见改（作者意见最高优先）；废弃/标记已发布各就各位
 ok52 = ("saveStory()" in usrc and "doExport()" in usrc
         and "'doQC()'" in usrc and "'doReview()'" in usrc
         and "'doPolish()'" in usrc and "'approve()'" in usrc and "'doPublish()'" in usrc
@@ -879,5 +879,8 @@ ok52 = ("saveStory()" in usrc and "doExport()" in usrc
         and 'onclick="rejectStory()"' in usrc
         and 'onclick="markPublished()"' in usrc
         and dbsrc.count("polish_json") >= 2
-        and "polish_json=json.dumps" in gsrc)
+        and "polish_json=json.dumps" in gsrc
+        and "revise_messages" in gsrc and "按意见修稿" in gsrc
+        and "note=note" in asrc and "polish_messages" not in gsrc
+        and "没有可执行的意见" in gsrc and "没有可执行的意见" in usrc)
 print("52) 步骤条即操作:", ok52)

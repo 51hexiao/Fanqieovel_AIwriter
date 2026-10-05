@@ -374,7 +374,7 @@ details.t-more .t-meta{margin-bottom:0}
 <section id="tab-stories" hidden>
   <div class="s-wrap">
     <div class="s-side">
-      <div class="crumb">流水线：① 生成 → ② 质检 → ③ 审稿 → ④ 润色 → ⑤ 入库 → ⑥ 发布（在编辑器顶部点步骤执行）</div>
+      <div class="crumb">流水线：① 生成 → ② 质检 → ③ 审稿 → ④ 修稿 → ⑤ 入库 → ⑥ 发布（在编辑器顶部点步骤执行）</div>
       <div class="fbar" id="story-chips"></div>
       <div class="bar" style="margin-top:8px;gap:6px">
         <input type="text" id="story-q" placeholder="搜标题…" style="flex:1;min-width:0" oninput="storySearch(this.value)">
@@ -405,7 +405,7 @@ details.t-more .t-meta{margin-bottom:0}
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
         <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
         <div id="ed-loop">
-          <div class="field"><label>作者意见（终审编辑专用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="4"></textarea></div>
+          <div class="field"><label>作者意见（「修稿」步骤与质量环共用——最高优先级；留空则只按审稿与质检清单修）</label><textarea id="ed-note" rows="4"></textarea></div>
           <div class="bar">
             <button class="primary" onclick="startQuality()">下达意见·启动质量环</button>
             <span class="hint">改稿→校对→终审全自动，最多两轮；达标自动入库，不达标自动废弃</span>
@@ -906,12 +906,12 @@ async function cleanupEmpty() {
   loadStories();
 }
 /* 流水线：当前步骤索引（4 = 全部完成）；入库是瞬时动作，approved 直接点亮"发布" */
-const PIPE_STEPS = ['生成', '质检', '审稿', '润色', '入库', '发布'];
+const PIPE_STEPS = ['生成', '质检', '审稿', '修稿', '入库', '发布'];
 const PIPE_ACTS = [null, 'doQC()', 'doReview()', 'doPolish()', 'approve()', 'doPublish()'];
 const PIPE_TIPS = ['稿件从选题页生成，这里只读',
   '本地质检：时间线/字数/AI味/平台风险，出分数；改动正文后可点它重跑',
   'AI审稿：按线别打逻辑分/钩子分并列问题清单；改动正文后可点它重跑',
-  '重写正文：合并碎段、去AI味，情节不变（会先保存你的修改）',
+  '按意见修稿：作者意见最高优先级，其次AI审稿清单、质检硬伤；情节主干不变（先跑过质检/审稿或在「作者意见」框写意见才有得修）',
   '登记人名入库，解锁发布；入库后此步不可重跑',
   '打开发布助手，自动填入草稿'];
 function renderPipe(s, qcRep, rvRep, quRep) {
@@ -1084,15 +1084,21 @@ async function doReview() {
   } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
 }
 async function doPolish() {
-  if (!confirm('润色会重写正文（合并碎段、去AI味），情节不变。继续？')) return;
-  await saveStory();
   const st = $('#ed-status');
-  busy(st, '润色中…');
+  const note = $('#ed-note').value.trim();
+  const s = await api('/api/stories/' + curId);
+  if (!note && !_pj(s.review_json) && !_pj(s.qc_json)) {
+    idle(st, '✗ 没有可执行的意见：先点「质检」或「审稿」，或在下方「作者意见」框写清楚要改的点', 'err');
+    return;
+  }
+  if (!confirm('修稿会按意见重写正文：作者意见最高优先级，其次AI审稿清单、质检硬伤；情节主干不变。继续？')) return;
+  await saveStory();
+  busy(st, '按意见修稿中…');
   try {
-    const {task_id} = await api(`/api/stories/${curId}/polish`, {method: 'POST'});
-    await poll(task_id, s => busy(st, s));
+    const {task_id} = await api(`/api/stories/${curId}/polish`, {method: 'POST', body: JSON.stringify({note})});
+    await poll(task_id, x => busy(st, x));
     await openStory(curId);
-    idle(st, '✓ 润色完成，请通读检查', 'ok');
+    idle(st, '✓ 修稿完成，请通读检查', 'ok');
   } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
 }
 async function approve() {

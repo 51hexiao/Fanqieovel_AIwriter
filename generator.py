@@ -216,23 +216,32 @@ def review_story(sid, log=print):
     return data
 
 
-def polish_story(sid, log=print):
+def polish_story(sid, log=print, note=""):
+    """按意见修稿：作者意见最高优先级，其次 AI 审稿清单、质检硬伤；情节主干不变。"""
     story = db.get_story(sid)
+    note = (note or "").strip()
+    review = _load_json_field(story, "review_json") or {}
+    qc = _load_json_field(story, "qc_json") or {}
+    review_issues = review.get("issues") or []
+    qc_issues = qc.get("issues") or []
+    if not note and not review_issues and not qc_issues:
+        raise ValueError("没有可执行的意见：先点「质检」或「审稿」，或在「作者意见」框写下要改的点")
     chunks = _split_body(story["body"])
     out = []
     for mk, txt in chunks:
         if not txt.strip():
             continue
         label = f"「{mk}」" if mk else "全文"
-        log(f"润色{label}…")
-        new = llm.chat(prompts.polish_messages(txt, story["title"]),
+        log(f"按意见修稿{label}…")
+        new = llm.chat(prompts.revise_messages(story["title"], story.get("line") or "悬疑",
+                                               note, review_issues, qc_issues, label, txt),
                        temperature=0.5,
                        max_tokens=min(8000, max(4000, int(len(txt) * 1.5)))).strip()
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
         out.append(f"{mk}\n{new}" if mk else new)
     body2 = db.clean_text("\n".join(out))
     db.update_story(sid, body=body2, polish_json=json.dumps({"at": db.now()}))
-    log("润色完成")
+    log("修稿完成")
     return body2
 
 def _split_body(body):
