@@ -849,3 +849,12 @@ ok49 = ("你只管两件事" in usrc and "出题设定" in usrc
         and "btn-mk-toggle" in usrc
         and "12 * 3600 * 1000" in usrc and "scrapeMarket(true)" in usrc)
 print("49) 参与极简改版:", ok49)
+
+# 50) 整齐+清晰+高级感改版：出题两行面板 / 标签独立行 / 风向条徽章 / 主色统一
+ok50 = ("gen-card" in usrc and "gen-row" in usrc and "gen-label" in usrc
+        and "t-tags" in usrc and "mk-badge" in usrc and "mk-counts" in usrc
+        and "--shadow-md" in usrc
+        and 'class="card gen-card"' in usrc
+        and 'lbtn.active{border-color:var(--acc)' in usrc
+        and "#topics-list .card > button.primary{width:100%" in usrc)
+print("50) 视觉改版落地:", ok50)
