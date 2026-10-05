@@ -617,7 +617,7 @@ print("36) 新功能界面可见:", ok36)
 # 37) 稿件页改版：两栏布局 + 筛选/快捷操作 + 按状态收敛按钮 + 空稿清理
 ok37 = ('.s-wrap{display:grid' in usrc and 'id="story-chips"' in usrc
         and "S_FILTERS" in usrc and "'pending'" in usrc
-        and "renderEditorActions" in usrc and "cleanupEmpty" in usrc
+        and "applyEditorState" in usrc and "cleanupEmpty" in usrc
         and "quickPublish" in usrc and "ed-loop" in usrc
         and "editor-empty" in usrc
         and "_pj(s.quality_json)" in usrc and "const _pj" in usrc
@@ -647,13 +647,14 @@ ok38 = ok38 and ("t-tier" in usrc and "setTopicTier" in usrc
                  and "tierName" in usrc)
 print("38) 字数档位:", ok38)
 
-# 39) 稿件页流程可视化：流水线步骤条+质量证据+操作分层(cta/危险)+卡片进度线
+# 39) 稿件页流程可视化：步骤即可按钮（点步骤自动执行），底部按钮排已删
 ok39 = ('id="ed-pipe"' in usrc and "function renderPipe" in usrc
-        and "PIPE_STEPS" in usrc and "PIPE_STAGE" in usrc
-        and "质检·审核" in usrc and "renderPipe(s, qcRep, rvRep, quRep)" in usrc
-        and "primary ed-cta" in usrc
-        and "'ed-danger'" in usrc and "'ed-sub'" in usrc
-        and "'AI审稿', 'ed-sub'" in usrc
+        and "PIPE_STEPS = ['生成', '质检', '审稿', '润色', '入库', '发布']" in usrc
+        and "PIPE_ACTS" in usrc and "PIPE_TIPS" in usrc
+        and "renderPipe(s, qcRep, rvRep, quRep)" in usrc
+        and "ed-actions" not in usrc and "ed-cta" not in usrc
+        and "质检·审核" not in usrc and "PIPE_STAGE" not in usrc
+        and 'class="ed-danger"' in usrc and 'class="ed-sub"' in usrc
         and "s-prog" not in usrc and "s-d" in usrc and "流水线：① 生成" in usrc
         and "startQuality(), '下达意见·启动质量环', 'primary'" not in usrc)
 print("39) 稿件页流程可视化:", ok39)
@@ -870,8 +871,13 @@ ok51 = ("_edPoll" in usrc and "stopEdPoll" in usrc
         and usrc.count("stopEdPoll()") >= 4)
 print("51) 编辑器生成中自动刷新:", ok51)
 
-# 52) 主线按钮统一为「下一步 · xx」，编辑/导出全流程常驻
-ok52 = ("'下一步 · 批准入库'" in usrc and "'下一步 · 打开发布助手'" in usrc
-        and "saveStory()" in usrc and "doExport()" in usrc
-        and "'primary ed-cta'" in usrc)
-print("52) 下一步主线按钮:", ok52)
+# 52) 步骤条即操作：点步骤自动执行；润色完成有落库标记；废弃/标记已发布各就各位
+ok52 = ("saveStory()" in usrc and "doExport()" in usrc
+        and "'doQC()'" in usrc and "'doReview()'" in usrc
+        and "'doPolish()'" in usrc and "'approve()'" in usrc and "'doPublish()'" in usrc
+        and "!!s.polish_json" in usrc
+        and 'onclick="rejectStory()"' in usrc
+        and 'onclick="markPublished()"' in usrc
+        and dbsrc.count("polish_json") >= 2
+        and "polish_json=json.dumps" in gsrc)
+print("52) 步骤条即操作:", ok52)

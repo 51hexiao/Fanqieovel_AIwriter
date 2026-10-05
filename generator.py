@@ -231,7 +231,7 @@ def polish_story(sid, log=print):
         new = re.sub(r"^```[a-z]*\n?|```$", "", new).strip()
         out.append(f"{mk}\n{new}" if mk else new)
     body2 = db.clean_text("\n".join(out))
-    db.update_story(sid, body=body2)
+    db.update_story(sid, body=body2, polish_json=json.dumps({"at": db.now()}))
     log("润色完成")
     return body2
 

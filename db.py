@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
         if "quality_json" not in cols:
             c.execute("ALTER TABLE stories ADD COLUMN quality_json TEXT DEFAULT ''")
+        if "polish_json" not in cols:  # 润色完成标记（流水线「润色」步骤的完成依据）
+            c.execute("ALTER TABLE stories ADD COLUMN polish_json TEXT DEFAULT ''")
         if "variant" not in cols:
             c.execute("ALTER TABLE stories ADD COLUMN variant TEXT DEFAULT ''")
         if "sec_words" not in cols:

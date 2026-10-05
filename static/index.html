@@ -133,16 +133,20 @@ button.mini{padding:3px 10px;font-size:12px}
 .p-step.cur .p-name{color:var(--acc);font-weight:600}
 .p-step.rej .p-dot{border-color:var(--red);color:var(--red)}
 .p-step.rej .p-name{color:var(--red);font-weight:600}
+/* 步骤即可按钮：可执行的步骤悬停点亮，生成中/不可执行则置灰 */
+.p-step.click{cursor:pointer}
+.p-step.click:hover .p-dot{box-shadow:0 0 0 3px var(--acc-dim)}
+.p-step.click:not(.done):hover .p-dot{border-color:var(--acc);color:var(--acc)}
+.p-step.click:hover .p-name{color:var(--acc)}
+.p-step.off{cursor:default}
 .p-ev{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
 .p-ev span{font-size:11px;padding:2px 9px;border:1px solid var(--line);border-radius:20px;color:var(--muted)}
 .p-ev b{font-weight:600}
 .p-ev .good{color:var(--green)}
 .p-ev .bad{color:var(--red)}
-.ed-cta{padding:8px 18px}
 .ed-sub{padding:6px 12px;font-size:12.5px;color:var(--muted);background:transparent}
 .ed-danger{margin-left:auto;padding:6px 12px;font-size:12.5px;color:var(--red);background:none;border-color:transparent}
 .ed-danger:hover{border-color:var(--red);color:var(--red)}
-#ed-actions{gap:8px}
 /* 编辑器右侧：审查结果独立栏（列表 | 正文 | 报告 三列布局） */
 .s-reps{min-width:0;position:sticky;top:10px;display:flex;flex-direction:column}
 .s-reps-h{font-size:12px;color:var(--muted);margin:2px 2px 8px;font-weight:600;letter-spacing:1px}
@@ -370,7 +374,7 @@ details.t-more .t-meta{margin-bottom:0}
 <section id="tab-stories" hidden>
   <div class="s-wrap">
     <div class="s-side">
-      <div class="crumb">流水线：① 生成 → ② 质检·审核 → ③ 入库 → ④ 发布</div>
+      <div class="crumb">流水线：① 生成 → ② 质检 → ③ 审稿 → ④ 润色 → ⑤ 入库 → ⑥ 发布（在编辑器顶部点步骤执行）</div>
       <div class="fbar" id="story-chips"></div>
       <div class="bar" style="margin-top:8px;gap:6px">
         <input type="text" id="story-q" placeholder="搜标题…" style="flex:1;min-width:0" oninput="storySearch(this.value)">
@@ -396,8 +400,8 @@ details.t-more .t-meta{margin-bottom:0}
           <span style="flex:1"></span>
           <button class="ed-sub" onclick="saveStory()">保存修改</button>
           <button class="ed-sub" onclick="doExport()">导出TXT</button>
+          <button class="ed-danger" onclick="rejectStory()" title="作废这篇稿件，可在「已废弃」栏彻底删除">废弃</button>
         </div>
-        <div class="bar" id="ed-actions" style="margin-top:6px"></div>
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
         <textarea id="ed-body" rows="22" spellcheck="false"></textarea>
         <div id="ed-loop">
@@ -418,6 +422,7 @@ details.t-more .t-meta{margin-bottom:0}
             <button onclick="copyPart('body')">复制正文（备用）</button>
             <a id="writer-link" href="#" target="_blank" class="link" style="display:none">手动打开后台 ↗</a>
             <span class="status" id="pub-status"></span>
+            <button class="ed-sub" onclick="markPublished()" title="发布成功通常自动标记；仅当日志提示未捕捉到成功状态时手动点此留档">标记已发布</button>
           </div>
         </div>
       </div>
@@ -901,20 +906,31 @@ async function cleanupEmpty() {
   loadStories();
 }
 /* 流水线：当前步骤索引（4 = 全部完成）；入库是瞬时动作，approved 直接点亮"发布" */
-const PIPE_STEPS = ['生成', '质检·审核', '入库', '发布'];
-const PIPE_STAGE = {generating: 0, generated: 1, approved: 3, published: 4};
+const PIPE_STEPS = ['生成', '质检', '审稿', '润色', '入库', '发布'];
+const PIPE_ACTS = [null, 'doQC()', 'doReview()', 'doPolish()', 'approve()', 'doPublish()'];
+const PIPE_TIPS = ['稿件从选题页生成，这里只读',
+  '本地质检：时间线/字数/AI味/平台风险，出分数；改动正文后可点它重跑',
+  'AI审稿：按线别打逻辑分/钩子分并列问题清单；改动正文后可点它重跑',
+  '重写正文：合并碎段、去AI味，情节不变（会先保存你的修改）',
+  '登记人名入库，解锁发布；入库后此步不可重跑',
+  '打开发布助手，自动填入草稿'];
 function renderPipe(s, qcRep, rvRep, quRep) {
+  const done = [s.status !== 'generating', !!qcRep, !!rvRep, !!s.polish_json,
+                s.status === 'approved' || s.status === 'published', s.status === 'published'];
+  const busyGen = s.status === 'generating';
   let h = '<div class="pipe">';
   if (s.status === 'rejected') {
     h += PIPE_STEPS.map((n, i) =>
-      `<div class="p-step"><span class="p-dot">${i + 1}</span><span class="p-name">${n}</span></div>`
+      `<div class="p-step${done[i] ? ' done' : ''}"><span class="p-dot">${done[i] ? '✓' : i + 1}</span><span class="p-name">${n}</span></div>`
     ).join('<span class="p-line"></span>');
     h += '<span class="p-line"></span><div class="p-step rej"><span class="p-dot">!</span><span class="p-name">已废弃</span></div>';
   } else {
-    const st = PIPE_STAGE[s.status] ?? 0;
+    const cur = done.indexOf(false);
     h += PIPE_STEPS.map((n, i) => {
-      const cls = i < st ? ' done' : i === st ? ' cur' : '';
-      return `<div class="p-step${cls}"><span class="p-dot">${i < st ? '✓' : i + 1}</span><span class="p-name">${n}</span></div>`;
+      const clickable = !busyGen && !!PIPE_ACTS[i] && !(i === 4 && done[i]);
+      const cls = (done[i] ? ' done' : '') + (i === cur ? ' cur' : '') + (clickable ? ' click' : ' off');
+      const tip = PIPE_TIPS[i] + (clickable ? '（点此执行）' : '');
+      return `<div class="p-step${cls}" title="${tip}"${clickable ? ` onclick="${PIPE_ACTS[i]}"` : ''}><span class="p-dot">${done[i] ? '✓' : i + 1}</span><span class="p-name">${n}</span></div>`;
     }).join('<span class="p-line"></span>');
   }
   h += '</div>';
@@ -936,23 +952,7 @@ function renderPipe(s, qcRep, rvRep, quRep) {
   if (ev.length) h += `<div class="p-ev">${ev.join('')}</div>`;
   $('#ed-pipe').innerHTML = h;
 }
-function renderEditorActions(s) {
-  const G = {
-    generating: [],
-    generated: [
-      ['approve()', '下一步 · 批准入库', 'primary ed-cta'], ['doQC()', '本地质检', 'ed-sub'],
-      ['doReview()', 'AI审稿', 'ed-sub'], ['doPolish()', '润色', 'ed-sub'],
-      ['rejectStory()', '废弃', 'ed-danger'],
-    ],
-    approved: [
-      ['doPublish()', '下一步 · 打开发布助手', 'primary ed-cta'], ['markPublished()', '标记已发布', 'ed-sub'],
-      ['rejectStory()', '废弃', 'ed-danger'],
-    ],
-    published: [['doPublish()', '重新填入草稿', 'ed-sub']],
-    rejected: [['delStory(curId)', '彻底删除', 'ed-danger']],
-  };
-  $('#ed-actions').innerHTML = (G[s.status] || []).map(b =>
-    `<button${b[2] ? ` class="${b[2]}"` : ''} onclick="${b[0]}">${b[1]}</button>`).join('');
+function applyEditorState(s) {
   $('#ed-loop').hidden = !['generated', 'approved'].includes(s.status);
   $('#publish-panel').hidden = true;
 }
@@ -1025,7 +1025,7 @@ async function openStory(id) {
   $('#ed-status').textContent = `${LINE_NAMES[s.line || '悬疑'] || s.line}线 ▏${(STATUS[s.status] || [s.status])[0]} ▏${s.word_count} 字${tierName ? ' ▏' + tierName + '档' : ''}${s.variant ? ' ▏风格变体 ' + s.variant : ''}`;
   const tMain = ((s.topic || {}).combo || '').split('·')[0].trim();
   $('#ed-cat').textContent = tMain ? '发布主分类：《' + tMain + '》' : '';
-  renderEditorActions(s);
+  applyEditorState(s);
   const qcRep = _pj(s.qc_json), rvRep = _pj(s.review_json), quRep = _pj(s.quality_json);
   renderPipe(s, qcRep, rvRep, quRep);
   renderQC(qcRep);
@@ -1068,7 +1068,8 @@ async function saveStory() {
 }
 async function doQC() {
   await saveStory();
-  renderQC(await api(`/api/stories/${curId}/qc`, {method: 'POST'}));
+  await api(`/api/stories/${curId}/qc`, {method: 'POST'});
+  await openStory(curId);
   idle($('#ed-status'), '✓ 质检完成', 'ok');
 }
 async function doReview() {
