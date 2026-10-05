@@ -82,6 +82,20 @@ button.mini{padding:3px 10px;font-size:12px}
 .mrow:hover{border-color:var(--acc)}
 .mrow b{flex:none}
 .mrow .hint{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 选题页三段式工作流：①市场 ②出题 ③选题库 */
+.step-h{display:flex;align-items:center;gap:8px;margin:20px 0 10px}
+.step-n{width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+.step-h b{font-size:13.5px}
+#tab-topics .step-h{margin-top:22px}
+#tab-topics .crumb + .step-h{margin-top:14px}
+.mtabs{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+.mtab{border:1px solid var(--line);background:var(--panel);border-radius:999px;
+  padding:5px 12px;font-size:12.5px;cursor:pointer;color:var(--muted)}
+.mtab:hover{border-color:var(--acc);color:var(--acc)}
+.mtab.active{border-color:var(--acc);color:var(--acc);background:var(--acc-dim);font-weight:600}
+.mtab i{font-style:normal;font-size:10.5px;margin-left:3px;opacity:.75}
+.mkpane{min-height:36px}
 .mrow .dim{font-style:normal;flex:none;color:var(--dim);font-size:11px}
 .mtag{font-style:normal;flex:none;font-size:10.5px;color:#b4547a;
   background:rgba(180,84,122,.1);border-radius:4px;padding:1px 5px}
@@ -234,37 +248,61 @@ details.t-more .t-meta{margin-bottom:0}
 <main>
 
 <section id="tab-topics">
-  <div class="crumb">机器出点子：随机组合 / 手动录入——用过的自动标记，写过的题材和人名自动避开</div>
-  <div class="bar">
+  <div class="crumb">工作流：① 看市场风向 → ② 出选题（自动贴靠热词/力签/热榜）→ ③ 选题库勾选 → 批量写稿。用过的自动标记，写过的题材和人名自动避开。</div>
+
+  <div class="step-h">
+    <span class="step-n">1</span><b>今日市场风向</b>
+    <span class="hint">读者在求什么 · 官方在要什么 · 什么正在爆——点任意条目围绕它出题</span>
+    <span style="flex:1"></span>
+    <span class="hint" id="market-time"></span>
+    <button class="fbtn" onclick="scrapeMarket()" title="用发布助手浏览器打开作家后台灵感页抓取（浏览器需登录过番茄）">↻ 抓取</button>
+  </div>
+  <div class="card" id="market-card">
+    <div class="mtabs">
+      <button class="mtab active" data-mk="words" onclick="marketTab(this)">🔥 书荒热词<i id="mk-c-words"></i></button>
+      <button class="mtab" data-mk="picks" onclick="marketTab(this)">📣 主编力签<i id="mk-c-picks"></i></button>
+      <button class="mtab" data-mk="stories" onclick="marketTab(this)">📈 热门故事<i id="mk-c-stories"></i></button>
+      <span class="hint" id="mk-sub">读者求书多、在写的人少——点词出题，更易被看见</span>
+    </div>
+    <div class="mkpane" id="mk-pane-words">
+      <div id="market-words" class="hint">还没抓取：点右上「↻ 抓取」，助手浏览器会自动打开灵感页读榜（约 30 秒）。</div>
+    </div>
+    <div class="mkpane" id="mk-pane-picks" hidden><div id="market-picks"></div></div>
+    <div class="mkpane" id="mk-pane-stories" hidden><div id="market-stories"></div></div>
+  </div>
+
+  <div class="step-h">
+    <span class="step-n">2</span><b>出选题</b>
+    <span class="hint">🎲 自动贴靠整榜市场数据；或点上方条目定向出题</span>
+    <span style="flex:1"></span>
+    <span class="status" id="topics-status"></span>
+  </div>
+  <div class="bar" style="align-items:center">
     <span class="hint" style="margin-right:-4px">风格</span>
     <button class="lbtn active" data-line="悬疑" onclick="setLine(this)" title="前半憋屈给读者，主角清醒或无欲无求不内耗，后半反击爽，最终胜利属于主角">🗡 无脑爽文</button>
     <button class="lbtn" data-line="温情" onclick="setLine(this)" title="人间烟火：现实温情+白描文笔，真挚情感，允许极轻梦幻点缀">🏮 人间烟火</button>
     <button class="lbtn" data-line="严谨" onclick="setLine(this)" title="细腻写实：逻辑严谨、细节拉满——本格悬疑、主神空间/无限流，规则清晰、伏笔回收">🔍 细腻写实</button>
     <button class="lbtn" data-line="二创" onclick="setLine(this)" title="借大众熟知的IP讲新故事：名著/民间传说/影视/动漫四类底座，情怀+反差，考据不出错">🎭 二创改编</button>
     <span class="lsep"></span>
-    <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
-    <span class="status" id="topics-status"></span>
-  </div>
-  <div class="card" id="market-card">
-    <div class="qc-head" style="display:flex;align-items:center;gap:8px;margin:0 0 8px;border-top:none;padding:0">
-      <b>市场情报·作家后台灵感页</b>
-      <span class="hint">书荒热词（读者求书多、在写的人少）+ 主编力签（编辑求稿方向）+ 热门题材组合</span>
-      <span style="flex:1"></span>
-      <span class="hint" id="market-time"></span>
-      <button class="fbtn" onclick="scrapeMarket()" title="用发布助手浏览器打开作家后台灵感页抓取（浏览器需登录过番茄）">↻ 抓取</button>
-    </div>
-    <div id="market-words" class="hint">还没抓取：点「抓取」，助手浏览器会打开灵感页读榜（约 30 秒）。</div>
-    <div id="market-picks" style="margin-top:8px"></div>
-    <div id="market-stories"></div>
-  </div>
-  <div class="bar" style="align-items:center">
-    <button class="primary" onclick="openTopicModal()">＋ 手动录入选题</button>
-    <span class="lsep"></span>
     <span class="hint" style="margin-right:-4px">字数</span>
     <button class="fbtn active" data-tier="标准" onclick="setTier(this)" title="每节目标1500字×5节，成稿约5千~6千字">标准 5千+</button>
     <button class="fbtn" data-tier="加长" onclick="setTier(this)" title="每节目标2100字×5节，成稿约8千字上下">加长 8千+</button>
     <button class="fbtn" data-tier="特长" onclick="setTier(this)" title="每节目标2800字×5节，成稿约1.1万字上下">特长 1.1万+</button>
     <span style="flex:1"></span>
+    <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
+    <button onclick="openTopicModal()">＋ 手动录入</button>
+  </div>
+
+  <div class="step-h">
+    <span class="step-n">3</span><b>选题库</b>
+    <span class="hint" id="lib-count"></span>
+    <span style="flex:1"></span>
+    <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
+    <button id="btn-selall" onclick="selectAllTopics()" title="勾选当前列表里的全部选题">全选</button>
+    <button onclick="batchWrite()" title="按勾选顺序，一篇写完再写下一篇">✍ 批量写稿</button>
+    <button onclick="batchDelete()">🗑 批量删除</button>
+  </div>
+  <div class="bar" style="align-items:center">
     <span class="hint" style="margin-right:-4px">只看</span>
     <button class="fbtn active" data-f="" onclick="setFilter(this)">全部</button>
     <button class="fbtn" data-f="new" onclick="setFilter(this)">未用</button>
@@ -277,11 +315,6 @@ details.t-more .t-meta{margin-bottom:0}
       <option value="严谨">细腻写实</option>
       <option value="二创">二创改编</option>
     </select>
-    <span style="flex:1"></span>
-    <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
-    <button id="btn-selall" onclick="selectAllTopics()" title="勾选当前列表里的全部选题">全选</button>
-    <button onclick="batchWrite()" title="按勾选顺序，一篇写完再写下一篇">✍ 批量写稿</button>
-    <button onclick="batchDelete()">🗑 批量删除</button>
   </div>
   <div class="cards" id="topics-list"></div>
   <div class="modal-mask" id="topic-modal" hidden onclick="if(event.target===this)closeTopicModal()">
@@ -614,7 +647,9 @@ async function loadTopics() {
       </details>
       <button class="primary" onclick="writeTopic(${t.id})">${t.used_count ? '再写一篇' : '就写这篇'}</button>
     </div>`;
-  }).join('') : '<p class="hint">选题库是空的——随机生成，或在上方输入框录自己的点子</p>';
+  }).join('') : '<p class="hint">选题库是空的——回上方 ② 出选题：随机生成、点市场条目定向出题，或手动录入</p>';
+  const lc = $('#lib-count');
+  if (lc) lc.textContent = ts.length ? ('共 ' + ts.length + ' 条') : '';
   updateSelBar();
 }
 function _topicTask(url, busyMsg, doneMsg, payload, doneExtra) {
@@ -630,6 +665,18 @@ async function genTopics(hot) {
   _topicTask('/api/topics/generate',
              w ? ('围绕「' + w + '」出选题中…') : '随机生成选题中…',
              '✓ 完成，已放入选题库', {line: curLine, hot: w});
+}
+function marketTab(btn) {
+  document.querySelectorAll('.mtab').forEach(b => b.classList.toggle('active', b === btn));
+  const mk = btn.dataset.mk;
+  for (const p of ['words', 'picks', 'stories']) {
+    $('#mk-pane-' + p).hidden = p !== mk;
+  }
+  $('#mk-sub').textContent = {
+    words: '读者求书多、在写的人少——点词出题，更易被看见',
+    picks: '平台编辑明示求稿的方向——点行出题',
+    stories: '悬停看开篇 · 点行按它的题材组合出题'
+  }[mk];
 }
 async function loadMarket() {
   try {
@@ -652,6 +699,9 @@ async function loadMarket() {
     const rows = [...new Map((m.stories || []).map(s => [s.title, s])).values()]
       .sort((a, b) => (a.subtab === '黑马飙升' ? 0 : a.subtab === '经典高热' ? 1 : 2)
                     - (b.subtab === '黑马飙升' ? 0 : b.subtab === '经典高热' ? 1 : 2));
+    $('#mk-c-words').textContent = (m.words || []).length || '';
+    $('#mk-c-picks').textContent = (m.picks || []).length || '';
+    $('#mk-c-stories').textContent = rows.length || '';
     $('#market-stories').innerHTML = rows.length
       ? '<div style="margin-top:8px"><b style="font-size:12.5px">热门故事榜'
         + '（悬停看开篇，点行=按它的题材组合出题）</b>'

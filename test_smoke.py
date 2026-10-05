@@ -751,7 +751,8 @@ ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
         and "latest_market_stories" in gsrc and "注入热门故事榜" in gsrc
         and "latest_market_picks" in asrc
         and "market-picks" in usrc and "market-stories" in usrc
-        and "mrow" in usrc and "市场情报·作家后台灵感页" in usrc)
+        and "mrow" in usrc and "今日市场风向" in usrc
+        and "marketTab" in usrc and "step-n" in usrc and "lib-count" in usrc)
 print("45) 主编力签与热门故事榜:", ok45)
 
 # 46) 热门故事全字段：作者/开篇/字数入库；第一节写作注入开篇钩子参考
