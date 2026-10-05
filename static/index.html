@@ -239,7 +239,9 @@ code{color:var(--cyan);background:rgba(14,138,168,.08);padding:1px 6px;border-ra
 .t-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .t-combo{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:calc(100% - 60px)}
 .t-hook{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-#topics-list .card > button.primary{width:100%;margin-top:2px}
+.t-act{display:flex;gap:10px;margin-top:2px}
+.t-act .t-tier{width:148px;flex:none;padding:7px 10px;font-size:12.5px}
+.t-act button.primary{flex:1;width:auto}
 details.t-more{margin:0 0 12px;font-size:12.5px}
 details.t-more summary{cursor:pointer;color:var(--muted);font-size:12.5px;width:fit-content;user-select:none}
 details.t-more summary:hover{color:var(--text)}
@@ -269,7 +271,7 @@ details.t-more .t-meta{margin-bottom:0}
 <main>
 
 <section id="tab-topics">
-  <div class="crumb">你只管两件事：① 选风格和字数、点生成出题；② 选题库里勾选、点批量写稿。抓市场、拆解爆款、提炼规则、写稿、审稿全部自动，写过的题材和人名自动避开。</div>
+  <div class="crumb">你只管两件事：① 选风格、点生成出题；② 选题库里勾选、点批量写稿。抓市场、拆解爆款、提炼规则、写稿、审稿全部自动，写过的题材和人名自动避开；每篇的字数档在选题卡上下拉选。</div>
 
   <div class="bar" id="market-strip" style="align-items:center">
     <b style="font-size:12.5px">📡 市场风向</b>
@@ -295,7 +297,7 @@ details.t-more .t-meta{margin-bottom:0}
 
   <div class="step-h">
     <span class="step-n">1</span><b>出题设定</b>
-    <span class="hint">选风格和字数 → 生成选题：自动贴靠热词/力签/热榜与爆款规则</span>
+    <span class="hint">选风格 → 生成选题：自动贴靠热词/力签/热榜与爆款规则；每篇的目标字数在下方选题卡上选</span>
     <span style="flex:1"></span>
     <span class="status" id="topics-status"></span>
   </div>
@@ -306,12 +308,6 @@ details.t-more .t-meta{margin-bottom:0}
       <button class="lbtn" data-line="温情" onclick="setLine(this)" title="人间烟火：现实温情+白描文笔，真挚情感，允许极轻梦幻点缀">🏮 人间烟火</button>
       <button class="lbtn" data-line="严谨" onclick="setLine(this)" title="细腻写实：逻辑严谨、细节拉满——本格悬疑、主神空间/无限流，规则清晰、伏笔回收">🔍 细腻写实</button>
       <button class="lbtn" data-line="二创" onclick="setLine(this)" title="借大众熟知的IP讲新故事：名著/民间传说/影视/动漫四类底座，情怀+反差，考据不出错">🎭 二创改编</button>
-    </div>
-    <div class="gen-row">
-      <span class="gen-label">字数</span>
-      <button class="fbtn active" data-tier="标准" onclick="setTier(this)" title="每节目标1500字×5节，成稿约5千~6千字">标准 5千+</button>
-      <button class="fbtn" data-tier="加长" onclick="setTier(this)" title="每节目标2100字×5节，成稿约8千字上下">加长 8千+</button>
-      <button class="fbtn" data-tier="特长" onclick="setTier(this)" title="每节目标2800字×5节，成稿约1.1万字上下">特长 1.1万+</button>
       <span style="flex:1"></span>
       <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
       <button onclick="openTopicModal()">＋ 手动录入</button>
@@ -612,7 +608,7 @@ async function batchWrite() {
   for (let i = 0; i < ids.length; i++) {
     busy(st, `批量写稿 ${i + 1}/${ids.length}：选题 #${ids[i]} 生成中…`);
     try {
-      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST', body: JSON.stringify({tier: genTier})});
+      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST', body: JSON.stringify({})});
       await poll(task_id, s => busy(st, `批量写稿 ${i + 1}/${ids.length}：${s}`));
     } catch (e) {
       idle(st, '✗ 选题 #' + ids[i] + ' 写稿失败：' + e.message, 'err');
@@ -671,7 +667,7 @@ async function loadTopics() {
       <details class="t-more"><summary>议题与差异</summary>
         <div class="t-meta">议题 · ${esc(t.social || '-')}<br>差异 · ${esc(t.diff || '-')}</div>
       </details>
-      <button class="primary" onclick="writeTopic(${t.id})">${t.used_count ? '再写一篇' : '就写这篇'}</button>
+      <div class="t-act"><select class="t-tier" title="这篇的目标字数档，保存后单写/批量写稿都按这个档" onchange="setTopicTier(${t.id}, this.value)"><option value="标准"${t.tier === '加长' || t.tier === '特长' ? '' : ' selected'}>标准 5千+</option><option value="加长"${t.tier === '加长' ? ' selected' : ''}>加长 8千+</option><option value="特长"${t.tier === '特长' ? ' selected' : ''}>特长 1.1万+</option></select><button class="primary" onclick="writeTopic(${t.id})">${t.used_count ? '再写一篇' : '就写这篇'}</button></div>
     </div>`;
   }).join('') : '<p class="hint">选题库是空的——回上方 ② 出选题：随机生成、点市场条目定向出题，或手动录入</p>';
   const lc = $('#lib-count');
@@ -826,16 +822,15 @@ async function delTopic(id) {
   await api('/api/topics/' + id, {method: 'DELETE'});
   loadTopics();
 }
-let genTier = '标准';
-function setTier(btn) {
-  genTier = btn.dataset.tier;
-  document.querySelectorAll('.fbtn[data-tier]').forEach(b => b.classList.toggle('active', b === btn));
+async function setTopicTier(id, tier) {
+  try { await api('/api/topics/' + id + '/tier', {method: 'POST', body: JSON.stringify({tier})}); }
+  catch (e) { idle($('#topics-status'), '✗ 字数档保存失败：' + e.message, 'err'); }
 }
 async function writeTopic(id) {
   const st = $('#topics-status');
   busy(st, '写作流水线启动…');
   try {
-    const {task_id} = await api('/api/topics/' + id + '/write', {method: 'POST', body: JSON.stringify({tier: genTier})});
+    const {task_id} = await api('/api/topics/' + id + '/write', {method: 'POST', body: JSON.stringify({})});
     await poll(task_id, s => busy(st, s));
     idle(st, '✓ 写完了，已放入稿件库', 'ok');
     loadTopics();

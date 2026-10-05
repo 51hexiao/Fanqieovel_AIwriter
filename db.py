@@ -365,6 +365,19 @@ def use_topic(tid):
         c.execute("UPDATE topics SET status='used', used_count=used_count+1 WHERE id=?", (tid,))
 
 
+def set_topic_tier(tid, tier):
+    """字数档存在选题 data_json 里（免迁移），list_topics 会自动带出。"""
+    with _lock, _conn() as c:
+        row = c.execute("SELECT data_json FROM topics WHERE id=?", (tid,)).fetchone()
+        if not row:
+            return False
+        d = json.loads(row["data_json"])
+        d["tier"] = tier
+        c.execute("UPDATE topics SET data_json=? WHERE id=?",
+                  (json.dumps(d, ensure_ascii=False), tid))
+        return True
+
+
 def recent_topics(n=30):
     with _lock, _conn() as c:
         rows = c.execute(

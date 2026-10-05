@@ -186,10 +186,20 @@ def write_topic(tid: int, payload: Optional[dict] = None):
     topic = topics.get(tid)
     if not topic:
         raise HTTPException(404, "选题不存在")
-    tier = ((payload or {}).get("tier") or "标准").strip()
+    tier = ((payload or {}).get("tier") or (topic.get("tier") or "") or "标准").strip()
     sw = generator.WORD_TIERS.get(tier, 0)
     db.use_topic(tid)
     return start_task("story", lambda log: generator.start_story(topic, log, sec_words=sw))
+
+
+@app.post("/api/topics/{tid}/tier")
+def set_topic_tier(tid: int, payload: Optional[dict] = None):
+    tier = ((payload or {}).get("tier") or "").strip()
+    if tier not in generator.WORD_TIERS:
+        raise HTTPException(400, "未知字数档：" + tier)
+    if not db.set_topic_tier(tid, tier):
+        raise HTTPException(404, "选题不存在")
+    return {"ok": True, "tier": tier}
 
 
 # ---------- 爆款拆解库 ----------

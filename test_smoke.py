@@ -641,8 +641,9 @@ ok38 = ok38 and ("本节约1350字" in m38b and "不得少于1147字" in m38b
                  and "加长篇幅" not in m38b)
 sid38 = db.create_story({"title": "档位测试", "line": "悬疑"}, {}, sec_words=2100)
 ok38 = ok38 and db.get_story(sid38)["sec_words"] == 2100
-ok38 = ok38 and ("data-tier" in usrc and "setTier(this)" in usrc
-                 and "tier: genTier" in usrc and "特长 1.1万+" in usrc
+ok38 = ok38 and ("t-tier" in usrc and "setTopicTier" in usrc
+                 and "特长 1.1万+" in usrc
+                 and "'/api/topics/' + id + '/tier'" in usrc
                  and "tierName" in usrc)
 print("38) 字数档位:", ok38)
 
@@ -850,11 +851,14 @@ ok49 = ("你只管两件事" in usrc and "出题设定" in usrc
         and "12 * 3600 * 1000" in usrc and "scrapeMarket(true)" in usrc)
 print("49) 参与极简改版:", ok49)
 
-# 50) 整齐+清晰+高级感改版：出题两行面板 / 标签独立行 / 风向条徽章 / 主色统一
+# 50) 整齐+清晰+高级感改版：出题单行面板 / 标签独立行 / 风向条徽章 / 主色统一 / 字数档下沉到卡片
+dbsrc = io.open("db.py", encoding="utf-8").read()
 ok50 = ("gen-card" in usrc and "gen-row" in usrc and "gen-label" in usrc
         and "t-tags" in usrc and "mk-badge" in usrc and "mk-counts" in usrc
         and "--shadow-md" in usrc
         and 'class="card gen-card"' in usrc
         and 'lbtn.active{border-color:var(--acc)' in usrc
-        and "#topics-list .card > button.primary{width:100%" in usrc)
+        and ".t-act" in usrc and "setTopicTier" in usrc
+        and "set_topic_tier" in dbsrc and '/api/topics/{tid}/tier' in asrc
+        and '(topic.get("tier") or "") or "标准"' in asrc)
 print("50) 视觉改版落地:", ok50)
