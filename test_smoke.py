@@ -760,7 +760,7 @@ ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
         and "latest_market_stories" in gsrc and "注入热门故事榜" in gsrc
         and "latest_market_picks" in asrc
         and "market-picks" in usrc and "market-stories" in usrc
-        and "mrow" in usrc and "mtag" in usrc and "今日市场风向" in usrc
+        and "mrow" in usrc and "mtag" in usrc and "市场风向" in usrc
         and "marketTab" in usrc and "step-n" in usrc and "lib-count" in usrc)
 print("45) 主编力签与热门故事榜:", ok45)
 
@@ -841,3 +841,11 @@ ok48 = (callable(prompts.story_rule_messages)
         and '"rules"' in asrc and "爆款写法规则" in usrc)
 print("48) 爆款规则融入全流程:", ok48)
 db.save_market_rules([])
+
+# 49) 参与极简改版：只留「出题设定」「选题库」两步，风向降级为自动状态栏（超12小时自动刷新）
+ok49 = ("你只管两件事" in usrc and "出题设定" in usrc
+        and "选题库 · 勾选开写" in usrc
+        and "market-strip-info" in usrc and "toggleMarket" in usrc
+        and "btn-mk-toggle" in usrc
+        and "12 * 3600 * 1000" in usrc and "scrapeMarket(true)" in usrc)
+print("49) 参与极简改版:", ok49)

@@ -248,16 +248,17 @@ details.t-more .t-meta{margin-bottom:0}
 <main>
 
 <section id="tab-topics">
-  <div class="crumb">工作流：① 看市场风向 → ② 出选题（自动贴靠热词/力签/热榜）→ ③ 选题库勾选 → 批量写稿。风向数据自动融入出题、大纲、写作、审稿，用过的自动标记，写过的题材和人名自动避开。</div>
+  <div class="crumb">你只管两件事：① 选风格和字数、点生成出题；② 选题库里勾选、点批量写稿。抓市场、拆解爆款、提炼规则、写稿、审稿全部自动，写过的题材和人名自动避开。</div>
 
-  <div class="step-h">
-    <span class="step-n">1</span><b>今日市场风向</b>
-    <span class="hint">读者在求什么 · 官方在要什么 · 什么正在爆——抓取后自动拆解提炼成写法规则，融入出题→大纲→写作→审稿</span>
+  <div class="bar" id="market-strip" style="align-items:center">
+    <b style="font-size:12.5px">📡 市场风向</b>
+    <span class="hint" id="market-strip-info">读取中…</span>
     <span style="flex:1"></span>
     <span class="hint" id="market-time"></span>
-    <button class="fbtn" onclick="scrapeMarket()" title="用发布助手浏览器打开作家后台灵感页抓取（浏览器需登录过番茄）">↻ 抓取</button>
+    <button class="fbtn" onclick="scrapeMarket()" title="手动刷新：用助手浏览器打开灵感页读榜（数据超过 12 小时也会自动更新）">↻ 刷新</button>
+    <button class="fbtn" id="btn-mk-toggle" onclick="toggleMarket()">详情 ▾</button>
   </div>
-  <div class="card" id="market-card">
+  <div class="card" id="market-card" hidden>
     <div class="mtabs">
       <button class="mtab active" data-mk="words" onclick="marketTab(this)">🔥 书荒热词<i id="mk-c-words"></i></button>
       <button class="mtab" data-mk="picks" onclick="marketTab(this)">📣 主编力签<i id="mk-c-picks"></i></button>
@@ -265,15 +266,15 @@ details.t-more .t-meta{margin-bottom:0}
       <span class="hint" id="mk-sub">读者求书多、在写的人少——点词出题，更易被看见</span>
     </div>
     <div class="mkpane" id="mk-pane-words">
-      <div id="market-words" class="hint">还没抓取：点右上「↻ 抓取」，助手浏览器会自动打开灵感页读榜（约 30 秒）。</div>
+      <div id="market-words" class="hint">还没有数据：点「↻ 刷新」，或等系统自动更新（数据超过 12 小时自动抓）。</div>
     </div>
     <div class="mkpane" id="mk-pane-picks" hidden><div id="market-picks"></div></div>
     <div class="mkpane" id="mk-pane-stories" hidden><div id="market-stories"></div></div>
   </div>
 
   <div class="step-h">
-    <span class="step-n">2</span><b>出选题</b>
-    <span class="hint">🎲 自动贴靠整榜市场数据；或点上方条目定向出题</span>
+    <span class="step-n">1</span><b>出题设定</b>
+    <span class="hint">选风格和字数 → 生成选题：自动贴靠热词/力签/热榜与爆款规则</span>
     <span style="flex:1"></span>
     <span class="status" id="topics-status"></span>
   </div>
@@ -294,7 +295,7 @@ details.t-more .t-meta{margin-bottom:0}
   </div>
 
   <div class="step-h">
-    <span class="step-n">3</span><b>选题库</b>
+    <span class="step-n">2</span><b>选题库 · 勾选开写</b>
     <span class="hint" id="lib-count"></span>
     <span style="flex:1"></span>
     <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
@@ -711,6 +712,23 @@ async function loadMarket() {
     $('#mk-c-words').textContent = (m.words || []).length || '';
     $('#mk-c-picks').textContent = (m.picks || []).length || '';
     $('#mk-c-stories').textContent = rows.length || '';
+    const info = $('#market-strip-info');
+    if (info) {
+      info.textContent = m.captured_at
+        ? '已融入出题→大纲→写作→审稿 · 热词 ' + ((m.words || []).length)
+          + ' · 力签 ' + ((m.picks || []).length) + ' · 故事 ' + rows.length
+          + ' · 规则 ' + ((m.rules || []).length) + ' 条'
+        : '还没有数据，正在自动抓取…';
+      let stale = !m.captured_at;
+      if (m.captured_at) {
+        const t0 = new Date(String(m.captured_at).replace(' ', 'T'));
+        if (!isNaN(t0) && Date.now() - t0.getTime() > 12 * 3600 * 1000) stale = true;
+      }
+      if (stale && !window._mkAuto) {
+        window._mkAuto = true;
+        scrapeMarket(true);
+      }
+    }
     const rl = m.rules || [];
     $('#market-stories').innerHTML = (rows.length || rl.length)
       ? '<div style="margin-top:8px">'
@@ -740,9 +758,17 @@ async function loadMarket() {
       : '';
   } catch (e) {}
 }
-function scrapeMarket() {
-  return _topicTask('/api/market/scrape', '抓取市场情报中（浏览器会自动打开灵感页）…',
+function scrapeMarket(silent) {
+  if (silent) $('#market-strip-info').textContent = '风向数据较旧，正在自动更新…';
+  return _topicTask('/api/market/scrape',
+                    silent ? '市场风向自动更新中…' : '抓取市场情报中（浏览器会自动打开灵感页）…',
                     '✓ 已入库', {line: curLine}, loadMarket);
+}
+function toggleMarket() {
+  const c = $('#market-card');
+  c.hidden = !c.hidden;
+  $('#btn-mk-toggle').textContent = c.hidden ? '详情 ▾' : '收起 ▴';
+  if (!c.hidden) loadMarket();
 }
 function openTopicModal() {
   $('#topic-modal').hidden = false;
@@ -1269,6 +1295,7 @@ async function testConfig() {
 /* ---------- 启动 ---------- */
 api('/api/config').then(c => { CFG = c; updateSbApi(); }).catch(() => {});
 loadTopics();
+loadMarket();
 if (new URLSearchParams(location.search).get('story')) {
   showTab('stories');
   openStory(parseInt(new URLSearchParams(location.search).get('story'), 10));
