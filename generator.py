@@ -163,17 +163,24 @@ def start_story(topic, log=print, sec_words=0):
         log(f"撰写第 {i}/{total} 节…")
         story = db.get_story(sid)
         hooks = None
-        if i == 1:  # 开篇参考：热门故事榜的真实开篇钩子
+        if i == 1:  # 开篇样板：热门故事榜真实开篇 + AI 拆解出的钩子手法
             _hs, _seen = [], set()
             for s in sorted(db.latest_market_stories(120),
                             key=lambda x: 0 if x.get("subtab") == "黑马飙升" else 1):
                 b = (s.get("brief") or "").strip()
-                if b and s["title"] not in _seen:
-                    _seen.add(s["title"])
-                    _hs.append(b)
+                if not b or s["title"] in _seen:
+                    continue
+                _seen.add(s["title"])
+                tag = ""
+                try:
+                    ij = json.loads(s.get("insights") or "")
+                    tag = str(ij.get("hook") or "").strip()
+                except Exception:
+                    tag = ""
+                _hs.append(f"（{tag}）{b}" if tag else b)
             hooks = _hs[:4] or None
             if hooks:
-                log("注入热门开篇钩子参考 ×" + str(len(hooks)))
+                log("注入热门开篇样板 ×" + str(len(hooks)))
         raw = llm.chat(prompts.section_messages(story, i, total, hooks=hooks),
                        temperature=llm.cfg("temperature_write", 0.85),
                        max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))

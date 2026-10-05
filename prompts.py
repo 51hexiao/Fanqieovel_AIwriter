@@ -209,6 +209,25 @@ def bench_report_messages(digests, n, line):
 """ + digests)
     return [{"role": "system", "content": SYS_BENCH},
             {"role": "user", "content": user}]
+
+
+def story_insight_messages(items):
+    """榜单热门故事批量拆解：从标题/题材/开篇摘录提炼可复用写法。"""
+    lines = "\n".join(
+        f"编号{s['no']}｜{s.get('title', '')}｜题材：{s.get('cats', '')}"
+        f"｜{s.get('words', '')}\n开篇摘录：{s.get('brief', '')}"
+        for s in items)
+    user = """下面是番茄短故事热门榜的上榜故事（官方榜数据，只有标题、题材与开篇摘录）。请逐条拆解它们的写法，只输出JSON数组：
+[{"no":编号,"hook":"开篇钩子手法，一句话：它靠什么在前三行抓住人（反常物件/身份反差/危险预告等，说清信息给的快慢与留白程度）","style":"写法特色，一句话：结构、人设、情绪处理上最值得学的一点","imitate":"仿写要点，一句话：写同题材新故事时可以直接照做的手法，只谈手法不谈内容"}]
+
+要求：编号必须与输入一致；每条说法要具体到能执行，禁止"写得好""吸引人"这类空话；不要抄或改写摘录里的原句；所有字符串内部需要引用时一律用中文引号''「」《》，严禁出现未转义的英文双引号。
+
+榜单数据：
+""" + lines
+    return [{"role": "system", "content": SYS_BENCH},
+            {"role": "user", "content": user}]
+
+
 def topic_messages(combos, recent, line="悬疑", bench_titles=None,
                    hot_words=None, picks=None, hot_stories=None):
     import pools
@@ -301,17 +320,40 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
                        + "\n".join(rows) + "\n")
     stories_block = ""
     if hot_stories:
+        import json as _json
+        groups, order = {}, []
+        for s in hot_stories[:10]:
+            cat = (s.get("cats") or "其他").split("·")[0].strip() or "其他"
+            if cat not in groups:
+                groups[cat] = []
+                order.append(cat)
+            groups[cat].append(s)
         rows = []
-        for s in hot_stories[:8]:
-            one = f"- {s.get('title', '')}"
-            if s.get("cats"):
-                one += f"｜{s['cats']}"
-            if s.get("words"):
-                one += f"｜{s['words']}"
-            rows.append(one)
-        stories_block = ("\n【本周热门故事榜（官方榜；标题只学句式，题材·标签组合"
-                         "可直接借用或反其道避开拥挤赛道，字数代表平台当下受欢迎"
-                         "的体量）】\n" + "\n".join(rows) + "\n")
+        for cat in order:
+            rows.append(f"◇ {cat}")
+            for s in groups[cat]:
+                one = f"- {s.get('title', '')}"
+                if s.get("cats"):
+                    one += f"｜{s['cats']}"
+                if s.get("words"):
+                    one += f"｜{s['words']}"
+                ins = s.get("insights") or ""
+                try:
+                    ij = _json.loads(ins) if ins else {}
+                except Exception:
+                    ij = {}
+                parts = []
+                for k, lab in (("hook", "钩子"), ("style", "特色"),
+                               ("imitate", "仿写")):
+                    if str(ij.get(k) or "").strip():
+                        parts.append(f"{lab}：{ij[k]}")
+                if parts:
+                    one += "｜" + "；".join(parts)
+                rows.append(one)
+        stories_block = ("\n【本周热门故事榜·AI拆解（官方榜，按题材分类；"
+                         "学的是各条标注的钩子/特色/仿写手法，标题只学句式，"
+                         "题材·标签组合可直接借用或反其道避开拥挤赛道，"
+                         "禁止抄情节、句词、人名）】\n" + "\n".join(rows) + "\n")
     user = f"""请为下面 {len(combos)} 个组合各设计 1 个短故事选题。
 
 【本次组合】
@@ -675,10 +717,10 @@ def section_messages(story, no, total, hooks=None):
         extra += f"\n【调味包·{flv}】{pools.FLAVOR_PACKS[flv]}"
     hook_block = ""
     if hooks and no == 1:
-        hook_block = ("\n【本周热门故事开篇（官方榜数据；只学前两三行的钩子节奏"
-                      "与信息密度——多快抛出反常、多少信息留白，禁止抄情节、"
-                      "句词、人名）】\n"
-                      + "\n".join("- " + h[:110] for h in hooks[:4]) + "\n")
+        hook_block = ("\n【本周热门故事开篇样板（官方榜 + AI拆解；括号里是拆解出的"
+                      "钩子手法，仿写它的手法与信息密度——多快抛出反常、多少留白，"
+                      "禁止抄情节、句词、人名）】\n"
+                      + "\n".join("- " + h[:130] for h in hooks[:4]) + "\n")
     if line == "二创":
         closing = """直接输出本节正文（不要节名、不要解释），保持二创铁律与爽感法则。若为第一节：第一段直接砸出反常的处境（穿越落点、觉醒瞬间或领盒饭前的最后一天），原作设定只在剧情里自然带出，禁止说明书式科普，禁止铺垫开场。若非第一节：第一段必须直接接住上一节的断章（打脸落地、或冲突加压），禁止换个场景缓启动。每写一段自查一次：引用的原作元素符合原作设定吗？主角有没有夺原作主角的高光？这段删掉，冲突、爽点或情怀会不会少一层？不会就删掉。爽点出现时写得干脆利落，给足分量。写完正文后，另起一行以「摘要：」开头，用不超过60字概括本节内容（仅供后续续写参考，不属于正文）。"""
     elif rigor:

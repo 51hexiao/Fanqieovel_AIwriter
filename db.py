@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS market_stories(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT, cats TEXT DEFAULT '', subtab TEXT DEFAULT '',
   author TEXT DEFAULT '', brief TEXT DEFAULT '', words TEXT DEFAULT '',
-  captured_at TEXT
+  insights TEXT DEFAULT '', captured_at TEXT
 );
 CREATE TABLE IF NOT EXISTS market_picks(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS bench_reports(
             c.execute("ALTER TABLE market_stories ADD COLUMN cats TEXT DEFAULT ''")
         if "subtab" not in mcols:
             c.execute("ALTER TABLE market_stories ADD COLUMN subtab TEXT DEFAULT ''")
-        for col in ("author", "brief", "words"):
+        for col in ("author", "brief", "words", "insights"):
             if col not in mcols:
                 c.execute(f"ALTER TABLE market_stories ADD COLUMN {col} TEXT DEFAULT ''")
         pcols = {r[1] for r in c.execute("PRAGMA table_info(market_picks)")}
@@ -292,8 +292,19 @@ def latest_market_words(limit=80):
 def latest_market_stories(limit=120):
     with _lock, _conn() as c:
         return [dict(r) for r in c.execute(
-            "SELECT title,cats,subtab,author,brief,words,captured_at"
+            "SELECT title,cats,subtab,author,brief,words,insights,captured_at"
             " FROM market_stories ORDER BY id LIMIT ?", (limit,))]
+
+
+def save_story_insights(pairs):
+    """按标题回写 AI 拆解结果：pairs = [(标题, insights_json), …]"""
+    if not pairs:
+        return 0
+    with _lock, _conn() as c:
+        c.executemany(
+            "UPDATE market_stories SET insights=? WHERE title=?",
+            [(ins, title) for title, ins in pairs])
+        return len(pairs)
 
 
 def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):

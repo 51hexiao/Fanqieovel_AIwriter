@@ -788,6 +788,33 @@ ok46 = ("__author" in msrc and "__brief" in msrc and "__word-number" in msrc
         and "热门故事开篇" in m46 and "结婚前，老公再三保证" in m46
         and "热门故事开篇" not in m46b
         and "hooks=None" in psrc
-        and "注入热门开篇钩子参考" in gsrc and "hooks=hooks" in gsrc
+        and "注入热门开篇样板" in gsrc and "hooks=hooks" in gsrc
         and "market-stories" in usrc and "mtag" in usrc and "黑马飙升" in usrc)
 print("46) 热门故事全字段与开篇钩子:", ok46)
+
+# 47) 榜单故事 AI 拆解：拆解回写库、选题按题材分组注入样板、开篇样板带手法、面板展示
+import json as _j
+ins = _j.dumps({"hook": "反常行为开场", "style": "双时间线叙事",
+                "imitate": "前三行只给反常不给解释"}, ensure_ascii=False)
+m47 = prompts.topic_messages([], [], line="悬疑",
+                             hot_stories=[{"title": "拆解测", "cats": "婚姻家庭·现代",
+                                           "words": "9635 字", "insights": ins}])[1]["content"]
+m47h = prompts.section_messages(
+    {"title": "钩子测试", "line": "悬疑",
+     "outline": {"sections": [{"no": 1, "beats": ["b"]}],
+                 "characters": [], "clues": []}, "summaries": []}, 1, 5,
+    hooks=["（反常行为开场）结婚前，老公再三保证……"])[1]["content"]
+db.save_market_stories([{"title": "拆解测", "cats": "婚姻家庭·现代",
+                         "subtab": "黑马飙升", "brief": "开篇摘录测试"}])
+db.save_story_insights([("拆解测", ins)])
+_back47 = [s for s in db.latest_market_stories(5) if s["title"] == "拆解测"][0]
+db.save_market_stories([])
+ok47 = (callable(prompts.story_insight_messages)
+        and "analyze_stories" in msrc and "save_story_insights" in msrc
+        and "story_insight_messages" in msrc
+        and _back47["insights"].startswith("{")
+        and "AI拆解" in m47 and "◇ 婚姻家庭" in m47
+        and "钩子：反常行为开场" in m47 and "仿写：前三行只给反常不给解释" in m47
+        and "钩子手法" in m47h and "反常行为开场" in m47h
+        and "insights" in usrc and "insightsLine" in usrc)
+print("47) 榜单故事AI拆解:", ok47)

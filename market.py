@@ -174,6 +174,46 @@ def _wait_render(pg, selector, timeout_s=15):
     return False
 
 
+def analyze_stories(log=print):
+    """AI 拆解热门故事榜：从开篇摘录提炼钩子手法/写法特色/仿写要点，回写库。"""
+    rows = sorted(db.latest_market_stories(120),
+                  key=lambda x: 0 if x.get("subtab") == "黑马飙升" else 1)
+    batch, seen = [], set()
+    for s in rows:
+        if (s.get("brief") or "").strip() and s["title"] not in seen:
+            seen.add(s["title"])
+            batch.append(s)
+    if not batch:
+        log("⚠ 榜上没有可拆解的开篇，跳过 AI 拆解")
+        return 0
+    batch = batch[:12]
+    import llm
+    import prompts
+    items = [{"no": i + 1, "title": s["title"], "cats": s.get("cats", ""),
+              "words": s.get("words", ""), "brief": s["brief"][:150]}
+             for i, s in enumerate(batch)]
+    log(f"AI 拆解热门故事 ×{len(items)}（黑马飙升优先）…")
+    data = llm.ask_json(prompts.story_insight_messages(items),
+                        log=log, want_list=True,
+                        temperature=0.3, max_tokens=2200)
+    pairs = []
+    for d in data if isinstance(data, list) else []:
+        try:
+            no = int(d.get("no"))
+        except Exception:
+            continue
+        if not 1 <= no <= len(items):
+            continue
+        ins = {k: str(d.get(k) or "").strip()
+               for k in ("hook", "style", "imitate")}
+        if any(ins.values()):
+            pairs.append((items[no - 1]["title"],
+                          json.dumps(ins, ensure_ascii=False)))
+    db.save_story_insights(pairs)
+    log(f"✓ AI 拆解回写 {len(pairs)}/{len(items)} 条")
+    return len(pairs)
+
+
 def scrape(log=print):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -261,6 +301,12 @@ def scrape(log=print):
     db.save_market_words(rows)
     db.save_market_picks(picks)
     db.save_market_stories(stories)
+    n_ins = 0
+    try:
+        n_ins = analyze_stories(log)
+    except Exception as exc:
+        log("⚠ AI 拆解失败（不影响榜单数据）：" + str(exc))
     log(f"✓ 已入库：热词 {len(rows)} 个，主编力签 {len(picks)} 条，"
-        f"热门故事 {len(stories)} 条")
-    return {"words": len(rows), "picks": len(picks), "stories": len(stories)}
+        f"热门故事 {len(stories)} 条（AI 拆解 {n_ins} 条）")
+    return {"words": len(rows), "picks": len(picks), "stories": len(stories),
+            "insights": n_ins}
