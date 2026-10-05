@@ -82,6 +82,9 @@ button.mini{padding:3px 10px;font-size:12px}
 .mrow:hover{border-color:var(--acc)}
 .mrow b{flex:none}
 .mrow .hint{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mrow .dim{font-style:normal;flex:none;color:var(--dim);font-size:11px}
+.mtag{font-style:normal;flex:none;font-size:10.5px;color:#b4547a;
+  background:rgba(180,84,122,.1);border-radius:4px;padding:1px 5px}
 .s-item .s-d{font-size:11px;color:var(--dim);margin-top:6px}
 /* 流程可视化：编辑器顶部流水线 + 质量证据 + 分层操作 */
 .pipe{display:flex;align-items:center;margin:2px 0 12px}
@@ -252,7 +255,7 @@ details.t-more .t-meta{margin-bottom:0}
     </div>
     <div id="market-words" class="hint">还没抓取：点「抓取」，助手浏览器会打开灵感页读榜（约 30 秒）。</div>
     <div id="market-picks" style="margin-top:8px"></div>
-    <div id="market-cats"></div>
+    <div id="market-stories"></div>
   </div>
   <div class="bar" style="align-items:center">
     <button class="primary" onclick="openTopicModal()">＋ 手动录入选题</button>
@@ -646,13 +649,25 @@ async function loadMarket() {
       `<div class="mrow" title="${esc((p.desc || '').slice(0, 140))}"`
       + ` onclick="genTopics('${esc(p.title)}')">`
       + `<b>${esc(p.title)}</b><span class="hint">${esc(p.pitch || '')}</span></div>`).join('');
-    const cats = [...new Set((m.stories || []).map(s => s.cats).filter(Boolean))];
-    $('#market-cats').innerHTML = cats.length
-      ? '<div style="margin-top:8px"><b style="font-size:12.5px">热门故事·题材组合'
-        + '（黑马飙升/经典高热，点组合出题）</b><div style="margin-top:6px">'
-        + cats.slice(0, 14).map(c =>
-            `<span class="mchip" onclick="genTopics('${esc(c)}')">${esc(c)}</span>`).join('')
-        + '</div></div>'
+    const rows = [...new Map((m.stories || []).map(s => [s.title, s])).values()]
+      .sort((a, b) => (a.subtab === '黑马飙升' ? 0 : a.subtab === '经典高热' ? 1 : 2)
+                    - (b.subtab === '黑马飙升' ? 0 : b.subtab === '经典高热' ? 1 : 2));
+    $('#market-stories').innerHTML = rows.length
+      ? '<div style="margin-top:8px"><b style="font-size:12.5px">热门故事榜'
+        + '（悬停看开篇，点行=按它的题材组合出题）</b>'
+        + rows.slice(0, 12).map(s =>
+          `<div class="mrow" title="${esc(s.brief || s.title)}"`
+          + ` onclick="genTopics('${esc(s.cats || s.title)}')">`
+          + (s.subtab && s.subtab !== '全部'
+             ? `<i class="mtag">${esc(s.subtab)}</i>` : '')
+          + `<b>${esc(s.title)}</b>`
+          + `<span class="hint">${esc(s.cats || '')}</span>`
+          + `<i class="dim">${esc(s.words || '')}${s.author ? '·' + esc(s.author) : ''}</i>`
+          + `</div>`).join('')
+        + (rows.length > 12
+           ? `<div class="hint" style="margin-top:4px">还有 ${rows.length - 12} 条见数据库</div>`
+           : '')
+        + '</div>'
       : '';
   } catch (e) {}
 }

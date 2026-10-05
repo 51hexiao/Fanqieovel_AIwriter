@@ -69,23 +69,24 @@ def _gen_line_topics(n, log, line, hot=""):
         w['word'] for w in db.latest_market_words(14)]
     if hot_words:
         log('注入书荒热词：' + '、'.join(hot_words[:8]))
-    picks = cats = None
+    picks = hot_stories = None
     if not hot:  # 单词定向出题时保持聚焦，不掺整包
         picks = db.latest_market_picks(5) or None
         if picks:
             log('注入主编力签：' + '、'.join(p['title'] for p in picks))
-        _cats, _seen = [], set()
-        for s in db.latest_market_stories(120):
-            if s.get("cats") and s["cats"] not in _seen:
-                _seen.add(s["cats"])
-                _cats.append(s["cats"])
-        cats = _cats[:8] or None
-        if cats:
-            log('注入热门题材组合：' + '；'.join(cats[:4]) + '…')
+        _rows, _seen = [], set()
+        for s in sorted(db.latest_market_stories(120),
+                        key=lambda x: 0 if x.get("subtab") == "黑马飙升" else 1):
+            if s["title"] not in _seen:
+                _seen.add(s["title"])
+                _rows.append(s)
+        hot_stories = _rows[:8] or None
+        if hot_stories:
+            log('注入热门故事榜：' + '、'.join(s['title'] for s in hot_stories[:4]) + '…')
     data = llm.ask_json(prompts.topic_messages(combos, recent, line,
                                           bench_titles=titles or None,
                                           hot_words=hot_words or None,
-                                          picks=picks, story_cats=cats),
+                                          picks=picks, hot_stories=hot_stories),
                    temperature=1.0, max_tokens=3000, log=log, want_list=True, item_key="title")
     items = _as_list(data)[:n]
     out = []
@@ -152,7 +153,19 @@ def start_story(topic, log=print, sec_words=0):
     for i in range(1, total + 1):
         log(f"撰写第 {i}/{total} 节…")
         story = db.get_story(sid)
-        raw = llm.chat(prompts.section_messages(story, i, total),
+        hooks = None
+        if i == 1:  # 开篇参考：热门故事榜的真实开篇钩子
+            _hs, _seen = [], set()
+            for s in sorted(db.latest_market_stories(120),
+                            key=lambda x: 0 if x.get("subtab") == "黑马飙升" else 1):
+                b = (s.get("brief") or "").strip()
+                if b and s["title"] not in _seen:
+                    _seen.add(s["title"])
+                    _hs.append(b)
+            hooks = _hs[:4] or None
+            if hooks:
+                log("注入热门开篇钩子参考 ×" + str(len(hooks)))
+        raw = llm.chat(prompts.section_messages(story, i, total, hooks=hooks),
                        temperature=llm.cfg("temperature_write", 0.85),
                        max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
         m = re.search(r"摘要[:：]\s*([^\n]+)", raw)

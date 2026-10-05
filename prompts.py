@@ -210,7 +210,7 @@ def bench_report_messages(digests, n, line):
     return [{"role": "system", "content": SYS_BENCH},
             {"role": "user", "content": user}]
 def topic_messages(combos, recent, line="悬疑", bench_titles=None,
-                   hot_words=None, picks=None, story_cats=None):
+                   hot_words=None, picks=None, hot_stories=None):
     import pools
     roles = "、".join(pools.CAT["角色"])
     if line == "温情":
@@ -295,11 +295,19 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
             rows.append(one)
         picks_block = ("\n【主编力签：平台编辑明确求稿的方向，优先贴靠其中之一，"
                        "或让它与本题自然融合】\n" + "\n".join(rows) + "\n")
-    cats_block = ""
-    if story_cats:
-        cats_block = ("\n【近期热门故事的题材·标签组合（同款组合可直接借用，"
-                      "也可反其道避开拥挤赛道）】\n"
-                      + "；".join(story_cats[:8]) + "\n")
+    stories_block = ""
+    if hot_stories:
+        rows = []
+        for s in hot_stories[:8]:
+            one = f"- {s.get('title', '')}"
+            if s.get("cats"):
+                one += f"｜{s['cats']}"
+            if s.get("words"):
+                one += f"｜{s['words']}"
+            rows.append(one)
+        stories_block = ("\n【本周热门故事榜（官方榜；标题只学句式，题材·标签组合"
+                         "可直接借用或反其道避开拥挤赛道，字数代表平台当下受欢迎"
+                         "的体量）】\n" + "\n".join(rows) + "\n")
     user = f"""请为下面 {len(combos)} 个组合各设计 1 个短故事选题。
 
 【本次组合】
@@ -307,7 +315,7 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
 
 【组合说明】主分类/情节/情绪/背景取自番茄发布页官方分类（经过平台审核、决定流量分发），选题必须落在这些标签的读者预期里；官方角色标签（人物设定可择一自然融入，不要生硬贴标签）：{roles}；人设=主角姿态，记住爽文铁律：憋屈让读者受，主角保持清醒或无欲无求，最终胜利属于主角；底牌=逆袭引擎。这些写法约束用于保证选题不撞车。
 
-{bench_block}{hot_block}{picks_block}{cats_block}
+{bench_block}{hot_block}{picks_block}{stories_block}
 {_recent_block(recent)}
 
 每个选题输出一个JSON对象：{schema}
@@ -613,7 +621,7 @@ def outline_messages(topic, bench_openings=None):
             {"role": "user", "content": user}]
 
 
-def section_messages(story, no, total):
+def section_messages(story, no, total, hooks=None):
     line = story.get("line") or (story.get("topic") or {}).get("line", "悬疑")
     warm = line == "温情"
     rigor = line == "严谨"
@@ -661,6 +669,12 @@ def section_messages(story, no, total):
     flv = (story.get("topic") or {}).get("flavor")
     if flv and flv in pools.FLAVOR_PACKS:
         extra += f"\n【调味包·{flv}】{pools.FLAVOR_PACKS[flv]}"
+    hook_block = ""
+    if hooks and no == 1:
+        hook_block = ("\n【本周热门故事开篇（官方榜数据；只学前两三行的钩子节奏"
+                      "与信息密度——多快抛出反常、多少信息留白，禁止抄情节、"
+                      "句词、人名）】\n"
+                      + "\n".join("- " + h[:110] for h in hooks[:4]) + "\n")
     if line == "二创":
         closing = """直接输出本节正文（不要节名、不要解释），保持二创铁律与爽感法则。若为第一节：第一段直接砸出反常的处境（穿越落点、觉醒瞬间或领盒饭前的最后一天），原作设定只在剧情里自然带出，禁止说明书式科普，禁止铺垫开场。若非第一节：第一段必须直接接住上一节的断章（打脸落地、或冲突加压），禁止换个场景缓启动。每写一段自查一次：引用的原作元素符合原作设定吗？主角有没有夺原作主角的高光？这段删掉，冲突、爽点或情怀会不会少一层？不会就删掉。爽点出现时写得干脆利落，给足分量。写完正文后，另起一行以「摘要：」开头，用不超过60字概括本节内容（仅供后续续写参考，不属于正文）。"""
     elif rigor:
@@ -680,7 +694,7 @@ def section_messages(story, no, total):
 {prev_s}
 
 【线索清单】
-{clues}{extra}
+{clues}{extra}{hook_block}
 
 【本节情节点】
 {beats}

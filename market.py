@@ -129,14 +129,21 @@ _JS_STORIES = """() => {
   const out = [];
   const seen = new Set();
   for (const card of document.querySelectorAll('[class*=hot-story-card]')) {
-    const t = card.querySelector('[class*=__title]');
+    const q = (s) => card.querySelector(s);
+    const t = q('[class*=__title]');
     if (!t) continue;
-    const c = card.querySelector('[class*=__category]');
     const title = (t.textContent || '').trim();
     if (!title || seen.has(title)) continue;
     seen.add(title);
+    const a = q('[class*=__author]');
+    const b = q('[class*=__brief]');
+    const c = q('[class*=__category]');
+    const w = q('[class*=__word-number]');
     out.push({title,
-              cats: c ? (c.textContent || '').trim() : ''});
+              author: a ? (a.textContent || '').trim() : '',
+              brief: b ? (b.textContent || '').trim().slice(0, 150) : '',
+              cats: c ? (c.textContent || '').trim() : '',
+              words: w ? (w.textContent || '').trim() : ''});
   }
   return out.slice(0, 40);
 }"""

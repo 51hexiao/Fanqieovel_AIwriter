@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS market_words(
 CREATE TABLE IF NOT EXISTS market_stories(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT, cats TEXT DEFAULT '', subtab TEXT DEFAULT '',
+  author TEXT DEFAULT '', brief TEXT DEFAULT '', words TEXT DEFAULT '',
   captured_at TEXT
 );
 CREATE TABLE IF NOT EXISTS market_picks(
@@ -94,6 +95,9 @@ CREATE TABLE IF NOT EXISTS bench_reports(
             c.execute("ALTER TABLE market_stories ADD COLUMN cats TEXT DEFAULT ''")
         if "subtab" not in mcols:
             c.execute("ALTER TABLE market_stories ADD COLUMN subtab TEXT DEFAULT ''")
+        for col in ("author", "brief", "words"):
+            if col not in mcols:
+                c.execute(f"ALTER TABLE market_stories ADD COLUMN {col} TEXT DEFAULT ''")
             c.execute("UPDATE topics SET used_count = 1 WHERE status = 'used'")
         # 2026-10-03 改版：原"纯文线"并入温情线，其键位由"严谨线"（强逻辑）取代。
         # 旧数据里的 纯文 一律归入 温情（那边存的本来就是温情向选题）。
@@ -225,16 +229,21 @@ def save_market_words(rows):
 
 
 def save_market_stories(items):
-    """整批替换热门故事快照；items 为 {title, cats, subtab} 或纯标题字符串。"""
+    """整批替换热门故事快照；items 为 {title, cats, subtab, author, brief,
+    words} 或纯标题字符串。"""
     ts = now()
     with _lock, _conn() as c:
         c.execute("DELETE FROM market_stories")
         c.executemany(
-            "INSERT INTO market_stories(title,cats,subtab,captured_at)"
-            " VALUES(?,?,?,?)",
-            [(it["title"] if isinstance(it, dict) else it,
+            "INSERT INTO market_stories"
+            "(title,cats,subtab,author,brief,words,captured_at)"
+            " VALUES(?,?,?,?,?,?,?)",
+            [(it.get("title", "") if isinstance(it, dict) else str(it),
               (it.get("cats", "") if isinstance(it, dict) else ""),
-              (it.get("subtab", "") if isinstance(it, dict) else ""), ts)
+              (it.get("subtab", "") if isinstance(it, dict) else ""),
+              (it.get("author", "") if isinstance(it, dict) else ""),
+              (it.get("brief", "") if isinstance(it, dict) else ""),
+              (it.get("words", "") if isinstance(it, dict) else ""), ts)
              for it in items])
         return len(items)
 
@@ -277,8 +286,8 @@ def latest_market_words(limit=80):
 def latest_market_stories(limit=120):
     with _lock, _conn() as c:
         return [dict(r) for r in c.execute(
-            "SELECT title,cats,subtab,captured_at FROM market_stories"
-            " ORDER BY id LIMIT ?", (limit,))]
+            "SELECT title,cats,subtab,author,brief,words,captured_at"
+            " FROM market_stories ORDER BY id LIMIT ?", (limit,))]
 
 
 def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):

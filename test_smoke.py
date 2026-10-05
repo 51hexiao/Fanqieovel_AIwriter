@@ -732,20 +732,52 @@ print("44) 市场热词抓取与注入:", ok44)
 # 45) 灵感页二期：主编力签抓取并注入选题，热门故事带题材组合；作品榜字体反爬不抓
 m_picks = prompts.topic_messages([], [], line="悬疑",
                                  picks=[{"title": "机甲文", "pitch": "好写有量"}])[1]["content"]
-m_cats = prompts.topic_messages([], [], line="悬疑",
-                                story_cats=["婚姻家庭·养崽文·家庭·现代"])[1]["content"]
+m_sto = prompts.topic_messages([], [], line="悬疑",
+                               hot_stories=[{"title": "姐弟恋的第七年",
+                                             "cats": "婚姻家庭·现代·追妻火葬场",
+                                             "words": "9635 字"}])[1]["content"]
 gsrc = io.open("generator.py", encoding="utf-8").read()
 ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
         and "recommend-item-content-title" in msrc
-        and "hot-story-card" in msrc and "extra__category" in msrc
+        and "hot-story-card" in msrc
         and "黑马飙升" in msrc and "save_market_picks" in msrc
         and callable(db.save_market_picks) and callable(db.latest_market_picks)
         and "字体反爬" in msrc
         and "主编力签" in m_picks and "机甲文——好写有量" in m_picks
-        and "题材·标签组合" in m_cats and "婚姻家庭·养崽文" in m_cats
-        and "主编力签" not in prompts.topic_messages([], [], line="悬疑")[1]["content"]
+        and "本周热门故事榜" in m_sto and "姐弟恋的第七年" in m_sto
+        and "婚姻家庭·现代·追妻火葬场" in m_sto and "9635 字" in m_sto
+        and "本周热门故事榜" not in prompts.topic_messages([], [], line="悬疑")[1]["content"]
         and "latest_market_picks" in gsrc and "注入主编力签" in gsrc
+        and "latest_market_stories" in gsrc and "注入热门故事榜" in gsrc
         and "latest_market_picks" in asrc
-        and "market-picks" in usrc and "market-cats" in usrc
+        and "market-picks" in usrc and "market-stories" in usrc
         and "mrow" in usrc and "市场情报·作家后台灵感页" in usrc)
-print("45) 主编力签与题材组合:", ok45)
+print("45) 主编力签与热门故事榜:", ok45)
+
+# 46) 热门故事全字段：作者/开篇/字数入库；第一节写作注入开篇钩子参考
+m46 = prompts.section_messages(
+    {"title": "钩子测试", "line": "悬疑",
+     "outline": {"sections": [{"no": 1, "beats": ["b"]}],
+                 "characters": [], "clues": []}, "summaries": []}, 1, 5,
+    hooks=["结婚前，老公再三保证，他和前妻的儿子不会打扰我们的生活。",
+           "接到物业索赔950万的电话时，我正在外地出差。"])[1]["content"]
+m46b = prompts.section_messages(
+    {"title": "钩子测试", "line": "悬疑",
+     "outline": {"sections": [{"no": 2, "beats": ["b"]}],
+                 "characters": [], "clues": []}, "summaries": ["x"]}, 2, 5,
+    hooks=["开篇钩子"])[1]["content"]
+db.save_market_stories([{"title": "钩子测", "cats": "婚姻家庭·现代",
+                         "subtab": "黑马飙升", "author": "云小溪",
+                         "brief": "开篇内容测试", "words": "9635 字"}])
+_back = [s for s in db.latest_market_stories(5) if s["title"] == "钩子测"][0]
+db.save_market_stories([])
+psrc = io.open("prompts.py", encoding="utf-8").read()
+ok46 = ("__author" in msrc and "__brief" in msrc and "__word-number" in msrc
+        and _back["author"] == "云小溪" and _back["brief"] == "开篇内容测试"
+        and _back["words"] == "9635 字"
+        and "热门故事开篇" in m46 and "结婚前，老公再三保证" in m46
+        and "热门故事开篇" not in m46b
+        and "hooks=None" in psrc
+        and "注入热门开篇钩子参考" in gsrc and "hooks=hooks" in gsrc
+        and "market-stories" in usrc and "mtag" in usrc and "黑马飙升" in usrc)
+print("46) 热门故事全字段与开篇钩子:", ok46)
