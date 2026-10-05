@@ -729,21 +729,30 @@ ok44 = ("INSPIRATION_URL" in msrc and "书荒热词榜" in msrc and "热门故�
         and "genTopics(hot)" in usrc and "'/api/market'" in usrc)
 print("44) 市场热词抓取与注入:", ok44)
 
-# 45) 灵感页二期：主编力签抓取并注入选题，热门故事带题材组合；作品榜字体反爬不抓
+# 45) 灵感页二期：主编力签抓取并注入选题（含男频/女频×脑洞/传统四块），
+#     热门故事带题材组合；作品榜字体反爬不抓
 m_picks = prompts.topic_messages([], [], line="悬疑",
-                                 picks=[{"title": "机甲文", "pitch": "好写有量"}])[1]["content"]
+                                 picks=[{"title": "机甲文", "pitch": "好写有量",
+                                         "board": "男频", "kind": "脑洞"}])[1]["content"]
 m_sto = prompts.topic_messages([], [], line="悬疑",
                                hot_stories=[{"title": "姐弟恋的第七年",
                                              "cats": "婚姻家庭·现代·追妻火葬场",
                                              "words": "9635 字"}])[1]["content"]
 gsrc = io.open("generator.py", encoding="utf-8").read()
+db.save_market_picks([{"title": "机甲文", "pitch": "好写有量",
+                       "desc": "编辑求稿", "board": "男频", "kind": "脑洞"}])
+_pk = db.latest_market_picks(10)[0]
+db.save_market_picks([])
 ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
         and "recommend-item-content-title" in msrc
+        and 'for board in ("男频", "女频")' in msrc
+        and 'for kind in ("脑洞", "传统")' in msrc
         and "hot-story-card" in msrc
         and "黑马飙升" in msrc and "save_market_picks" in msrc
         and callable(db.save_market_picks) and callable(db.latest_market_picks)
         and "字体反爬" in msrc
-        and "主编力签" in m_picks and "机甲文——好写有量" in m_picks
+        and _pk["board"] == "男频" and _pk["kind"] == "脑洞"
+        and "主编力签" in m_picks and "（男频·脑洞）机甲文——好写有量" in m_picks
         and "本周热门故事榜" in m_sto and "姐弟恋的第七年" in m_sto
         and "婚姻家庭·现代·追妻火葬场" in m_sto and "9635 字" in m_sto
         and "本周热门故事榜" not in prompts.topic_messages([], [], line="悬疑")[1]["content"]
@@ -751,7 +760,7 @@ ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
         and "latest_market_stories" in gsrc and "注入热门故事榜" in gsrc
         and "latest_market_picks" in asrc
         and "market-picks" in usrc and "market-stories" in usrc
-        and "mrow" in usrc and "今日市场风向" in usrc
+        and "mrow" in usrc and "mtag" in usrc and "今日市场风向" in usrc
         and "marketTab" in usrc and "step-n" in usrc and "lib-count" in usrc)
 print("45) 主编力签与热门故事榜:", ok45)
 

@@ -105,8 +105,9 @@ _JS_PICKS = """() => {
   const out = [];
   const seen = new Set();
   for (const t of document.querySelectorAll(
-      '[class*=recommend-item-content-title]')) {
-    const title = (t.textContent || '').trim();
+      '[class*=recommend-item-content-title]:not([class*=title-tag])')) {
+    const title = [...t.childNodes].filter(n => n.nodeType === 3)
+      .map(n => n.textContent || '').join(' ').trim();
     if (!title || seen.has(title)) continue;
     seen.add(title);
     let box = t.parentElement, pitch = '', desc = '';
@@ -213,8 +214,20 @@ def scrape(log=print):
             log("打开灵感页（主编力签）…")
             pg.goto(BASE_URL + "&type=2", wait_until="domcontentloaded")
             if _wait_render(pg, "[class*=recommend-item-content-title]"):
-                picks = pg.evaluate(_JS_PICKS) or []
-                log(f"主编力签：{len(picks)} 条")
+                for board in ("男频", "女频"):
+                    if not _click_text_js(pg, board):
+                        log(f"⚠ 力签没找到「{board}」切换，跳过")
+                        continue
+                    pg.wait_for_timeout(1200)
+                    for kind in ("脑洞", "传统"):
+                        if _click_text_js(pg, kind):
+                            pg.wait_for_timeout(1400)
+                        got = pg.evaluate(_JS_PICKS) or []
+                        for g in got:
+                            g["board"], g["kind"] = board, kind
+                        seen_t = {p["title"] for p in picks}
+                        picks.extend(g for g in got if g["title"] not in seen_t)
+                        log(f"力签·{board}·{kind}：{len(got)} 条")
             else:
                 log("⚠ 主编力签内容没渲染出来，本次为空")
 

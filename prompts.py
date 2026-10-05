@@ -288,13 +288,17 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
     picks_block = ""
     if picks:
         rows = []
-        for i, p in enumerate(picks[:5], 1):
-            one = f"{i}. {p.get('title', '')}"
+        for i, p in enumerate(picks[:12], 1):
+            seg = ""
+            if p.get("board") or p.get("kind"):
+                seg = f"（{p.get('board', '')}·{p.get('kind', '')}）"
+            one = f"{i}. {seg}{p.get('title', '')}"
             if p.get("pitch"):
                 one += f"——{p['pitch']}"
             rows.append(one)
-        picks_block = ("\n【主编力签：平台编辑明确求稿的方向，优先贴靠其中之一，"
-                       "或让它与本题自然融合】\n" + "\n".join(rows) + "\n")
+        picks_block = ("\n【主编力签（括号内是目标频道与题材类型，选与本题同频道的优先）："
+                       "平台编辑明确求稿的方向，优先贴靠其中之一，或让它与本题自然融合】\n"
+                       + "\n".join(rows) + "\n")
     stories_block = ""
     if hot_stories:
         rows = []

@@ -695,6 +695,7 @@ async function loadMarket() {
     pk.innerHTML = (m.picks || []).map(p =>
       `<div class="mrow" title="${esc((p.desc || '').slice(0, 140))}"`
       + ` onclick="genTopics('${esc(p.title)}')">`
+      + ((p.board || p.kind) ? `<i class="mtag">${esc(p.board || '')}·${esc(p.kind || '')}</i>` : '')
       + `<b>${esc(p.title)}</b><span class="hint">${esc(p.pitch || '')}</span></div>`).join('');
     const rows = [...new Map((m.stories || []).map(s => [s.title, s])).values()]
       .sort((a, b) => (a.subtab === '黑马飙升' ? 0 : a.subtab === '经典高热' ? 1 : 2)

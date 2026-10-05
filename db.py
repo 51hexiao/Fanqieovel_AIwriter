@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS market_stories(
 CREATE TABLE IF NOT EXISTS market_picks(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title TEXT, pitch TEXT DEFAULT '', desc TEXT DEFAULT '',
+  board TEXT DEFAULT '', kind TEXT DEFAULT '',
   captured_at TEXT
 );
 CREATE TABLE IF NOT EXISTS bench_reports(
@@ -98,6 +99,10 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         for col in ("author", "brief", "words"):
             if col not in mcols:
                 c.execute(f"ALTER TABLE market_stories ADD COLUMN {col} TEXT DEFAULT ''")
+        pcols = {r[1] for r in c.execute("PRAGMA table_info(market_picks)")}
+        for col in ("board", "kind"):  # 旧库迁移：主编力签补频道/类型列
+            if col not in pcols:
+                c.execute(f"ALTER TABLE market_picks ADD COLUMN {col} TEXT DEFAULT ''")
             c.execute("UPDATE topics SET used_count = 1 WHERE status = 'used'")
         # 2026-10-03 改版：原"纯文线"并入温情线，其键位由"严谨线"（强逻辑）取代。
         # 旧数据里的 纯文 一律归入 温情（那边存的本来就是温情向选题）。
@@ -254,9 +259,10 @@ def save_market_picks(rows):
     with _lock, _conn() as c:
         c.execute("DELETE FROM market_picks")
         c.executemany(
-            "INSERT INTO market_picks(title,pitch,desc,captured_at)"
-            " VALUES(?,?,?,?)",
-            [(r.get("title", ""), r.get("pitch", ""), r.get("desc", ""), ts)
+            "INSERT INTO market_picks(title,pitch,desc,board,kind,captured_at)"
+            " VALUES(?,?,?,?,?,?)",
+            [(r.get("title", ""), r.get("pitch", ""), r.get("desc", ""),
+              r.get("board", ""), r.get("kind", ""), ts)
              for r in rows])
         return len(rows)
 
@@ -264,7 +270,7 @@ def save_market_picks(rows):
 def latest_market_picks(limit=10):
     with _lock, _conn() as c:
         return [dict(r) for r in c.execute(
-            "SELECT title,pitch,desc,captured_at FROM market_picks"
+            "SELECT title,pitch,desc,board,kind,captured_at FROM market_picks"
             " ORDER BY id LIMIT ?", (limit,))]
 
 

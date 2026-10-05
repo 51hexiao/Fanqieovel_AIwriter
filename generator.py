@@ -71,7 +71,7 @@ def _gen_line_topics(n, log, line, hot=""):
         log('注入书荒热词：' + '、'.join(hot_words[:8]))
     picks = hot_stories = None
     if not hot:  # 单词定向出题时保持聚焦，不掺整包
-        picks = db.latest_market_picks(5) or None
+        picks = db.latest_market_picks(12) or None
         if picks:
             log('注入主编力签：' + '、'.join(p['title'] for p in picks))
         _rows, _seen = [], set()
