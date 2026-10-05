@@ -71,7 +71,16 @@ def _gen_line_topics(n, log, line, hot=""):
         log('注入书荒热词：' + '、'.join(hot_words[:8]))
     picks = hot_stories = None
     if not hot:  # 单词定向出题时保持聚焦，不掺整包
-        picks = db.latest_market_picks(12) or None
+        # 四个板块轮转取样：男女频、脑洞传统都进提示词，不按入库顺序截断
+        _groups = {}
+        for p in db.latest_market_picks(40):
+            _groups.setdefault((p.get("board", ""), p.get("kind", "")), []).append(p)
+        _rr = []
+        while len(_rr) < 12 and any(_groups.values()):
+            for pool in _groups.values():
+                if pool:
+                    _rr.append(pool.pop(0))
+        picks = _rr[:12] or None
         if picks:
             log('注入主编力签：' + '、'.join(p['title'] for p in picks))
         _rows, _seen = [], set()

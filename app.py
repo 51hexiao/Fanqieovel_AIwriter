@@ -119,7 +119,7 @@ def gen_topics(payload: Optional[dict] = None):
 @app.get("/api/market")
 def get_market():
     return {"words": db.latest_market_words(120),
-            "picks": db.latest_market_picks(10),
+            "picks": db.latest_market_picks(40),
             "stories": db.latest_market_stories(120),
             "captured_at": db.market_captured_at()}
 
