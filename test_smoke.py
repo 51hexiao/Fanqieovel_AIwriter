@@ -688,7 +688,7 @@ print("42) 填稿拟人化节奏:", ok42)
 # 43) 表单补全：封面模板入口自动点、声明/分类自动勾、发布按钮留人工
 ok43 = ("封面制作" in asrc and "完成制作" in asrc and "_cover_open" in asrc
         and "publish-short-category-select" in asrc and "arco-dropdown" in asrc
-        and "悬疑惊悚" in asrc and "_js(" in asrc
+        and "悬疑惊悚" in asrc and "悬疑灵异" in asrc and "女频悬疑" in asrc and "_js(" in asrc
         and 'name="下一步"' in asrc and "页面提示" in asrc
         and "我已阅读并同意" in asrc and "请设置后再提交发布" in asrc
         and "是否使用AI" in asrc
