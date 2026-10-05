@@ -897,7 +897,7 @@ async function cleanupEmpty() {
   if (!empties.length) return;
   if (!confirm('删除 ' + empties.length + ' 篇空稿（没有正文的占位稿）？')) return;
   for (const s of empties) await api('/api/stories/' + s.id, {method: 'DELETE'});
-  if (empties.some(s => s.id === curId)) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
+  if (empties.some(s => s.id === curId)) { curId = null; stopEdPoll(); $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
   loadStories();
 }
 /* 流水线：当前步骤索引（4 = 全部完成）；入库是瞬时动作，approved 直接点亮"发布" */
@@ -1008,8 +1008,11 @@ function renderQuality(q) {
 }
 /* 存量字段可能是旧版本写入的裸文本，解析失败一律按无报告处理，不能让编辑器打不开 */
 const _pj = t => { try { return t ? JSON.parse(t) : null; } catch (e) { return null; } };
+let _edPoll = null;
+function stopEdPoll() { if (_edPoll) { clearInterval(_edPoll); _edPoll = null; } }
 async function openStory(id) {
   curId = id;
+  stopEdPoll();
   const s = await api('/api/stories/' + id);
   $('#editor').hidden = false;
   $('#editor-empty').hidden = true;
@@ -1031,6 +1034,16 @@ async function openStory(id) {
   document.querySelectorAll('.s-item.sel').forEach(e => e.classList.remove('sel'));
   const el = document.querySelector(`.s-item[data-sid="${id}"]`);
   if (el) el.classList.add('sel');
+  if (s.status === 'generating') {
+    /* 生成中打开编辑器：轮询等写完，自动重渲染按钮和流水线（否则按钮区一直空白） */
+    _edPoll = setInterval(async () => {
+      if (curId !== id) return stopEdPoll();
+      try {
+        const s2 = await api('/api/stories/' + id);
+        if (s2.status && s2.status !== 'generating') { stopEdPoll(); openStory(id); loadStories(); }
+      } catch (e) {}
+    }, 4000);
+  }
 }
 function renderQC(rep) {
   if (!rep) { $('#qc-report').innerHTML = ''; return; }
@@ -1128,7 +1141,7 @@ function doExport() { window.open(`/api/stories/${curId}/export`); }
 async function delStory(id) {
   if (!confirm('删除稿件 #' + id + '？')) return;
   await api('/api/stories/' + id, {method: 'DELETE'});
-  if (curId === id) { curId = null; $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
+  if (curId === id) { curId = null; stopEdPoll(); $('#editor').hidden = true; $('#editor-empty').hidden = false; $('#reps-empty').hidden = false; }
   loadStories();
 }
 

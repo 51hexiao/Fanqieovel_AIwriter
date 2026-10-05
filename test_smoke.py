@@ -862,3 +862,10 @@ ok50 = ("gen-card" in usrc and "gen-row" in usrc and "gen-label" in usrc
         and "set_topic_tier" in dbsrc and '/api/topics/{tid}/tier' in asrc
         and '(topic.get("tier") or "") or "标准"' in asrc)
 print("50) 视觉改版落地:", ok50)
+
+# 51) 生成中打开编辑器：轮询等待写完自动重渲染按钮/流水线；关闭或切换时停表
+ok51 = ("_edPoll" in usrc and "stopEdPoll" in usrc
+        and "openStory(id); loadStories()" in usrc
+        and "s.status === 'generating'" in usrc
+        and usrc.count("stopEdPoll()") >= 4)
+print("51) 编辑器生成中自动刷新:", ok51)
