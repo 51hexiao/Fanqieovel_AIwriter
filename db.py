@@ -63,7 +63,13 @@ CREATE TABLE IF NOT EXISTS market_words(
 );
 CREATE TABLE IF NOT EXISTS market_stories(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  title TEXT, captured_at TEXT
+  title TEXT, cats TEXT DEFAULT '', subtab TEXT DEFAULT '',
+  captured_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_picks(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT, pitch TEXT DEFAULT '', desc TEXT DEFAULT '',
+  captured_at TEXT
 );
 CREATE TABLE IF NOT EXISTS bench_reports(
   line TEXT PRIMARY KEY, data_json TEXT DEFAULT '', created_at TEXT
@@ -83,6 +89,11 @@ CREATE TABLE IF NOT EXISTS bench_reports(
         tcols = {r[1] for r in c.execute("PRAGMA table_info(topics)")}
         if "used_count" not in tcols:
             c.execute("ALTER TABLE topics ADD COLUMN used_count INTEGER DEFAULT 0")
+        mcols = {r[1] for r in c.execute("PRAGMA table_info(market_stories)")}
+        if "cats" not in mcols:  # 旧库迁移：热门故事补题材标签列
+            c.execute("ALTER TABLE market_stories ADD COLUMN cats TEXT DEFAULT ''")
+        if "subtab" not in mcols:
+            c.execute("ALTER TABLE market_stories ADD COLUMN subtab TEXT DEFAULT ''")
             c.execute("UPDATE topics SET used_count = 1 WHERE status = 'used'")
         # 2026-10-03 改版：原"纯文线"并入温情线，其键位由"严谨线"（强逻辑）取代。
         # 旧数据里的 纯文 一律归入 温情（那边存的本来就是温情向选题）。
@@ -213,13 +224,39 @@ def save_market_words(rows):
         return len(rows)
 
 
-def save_market_stories(titles):
+def save_market_stories(items):
+    """整批替换热门故事快照；items 为 {title, cats, subtab} 或纯标题字符串。"""
     ts = now()
     with _lock, _conn() as c:
         c.execute("DELETE FROM market_stories")
-        c.executemany("INSERT INTO market_stories(title,captured_at) VALUES(?,?)",
-                      [(t, ts) for t in titles])
-        return len(titles)
+        c.executemany(
+            "INSERT INTO market_stories(title,cats,subtab,captured_at)"
+            " VALUES(?,?,?,?)",
+            [(it["title"] if isinstance(it, dict) else it,
+              (it.get("cats", "") if isinstance(it, dict) else ""),
+              (it.get("subtab", "") if isinstance(it, dict) else ""), ts)
+             for it in items])
+        return len(items)
+
+
+def save_market_picks(rows):
+    """整批替换主编力签快照。"""
+    ts = now()
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM market_picks")
+        c.executemany(
+            "INSERT INTO market_picks(title,pitch,desc,captured_at)"
+            " VALUES(?,?,?,?)",
+            [(r.get("title", ""), r.get("pitch", ""), r.get("desc", ""), ts)
+             for r in rows])
+        return len(rows)
+
+
+def latest_market_picks(limit=10):
+    with _lock, _conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT title,pitch,desc,captured_at FROM market_picks"
+            " ORDER BY id LIMIT ?", (limit,))]
 
 
 def market_captured_at():
@@ -237,10 +274,11 @@ def latest_market_words(limit=80):
             " ORDER BY board,kind,rank LIMIT ?", (limit,))]
 
 
-def latest_market_stories(limit=30):
+def latest_market_stories(limit=120):
     with _lock, _conn() as c:
-        return [r["title"] for r in c.execute(
-            "SELECT title FROM market_stories ORDER BY id LIMIT ?", (limit,))]
+        return [dict(r) for r in c.execute(
+            "SELECT title,cats,subtab,captured_at FROM market_stories"
+            " ORDER BY id LIMIT ?", (limit,))]
 
 
 def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):

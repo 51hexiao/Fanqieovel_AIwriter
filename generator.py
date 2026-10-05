@@ -69,9 +69,23 @@ def _gen_line_topics(n, log, line, hot=""):
         w['word'] for w in db.latest_market_words(14)]
     if hot_words:
         log('注入书荒热词：' + '、'.join(hot_words[:8]))
+    picks = cats = None
+    if not hot:  # 单词定向出题时保持聚焦，不掺整包
+        picks = db.latest_market_picks(5) or None
+        if picks:
+            log('注入主编力签：' + '、'.join(p['title'] for p in picks))
+        _cats, _seen = [], set()
+        for s in db.latest_market_stories(120):
+            if s.get("cats") and s["cats"] not in _seen:
+                _seen.add(s["cats"])
+                _cats.append(s["cats"])
+        cats = _cats[:8] or None
+        if cats:
+            log('注入热门题材组合：' + '；'.join(cats[:4]) + '…')
     data = llm.ask_json(prompts.topic_messages(combos, recent, line,
                                           bench_titles=titles or None,
-                                          hot_words=hot_words or None),
+                                          hot_words=hot_words or None,
+                                          picks=picks, story_cats=cats),
                    temperature=1.0, max_tokens=3000, log=log, want_list=True, item_key="title")
     items = _as_list(data)[:n]
     out = []

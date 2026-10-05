@@ -728,3 +728,24 @@ ok44 = ("INSPIRATION_URL" in msrc and "书荒热词榜" in msrc and "热门故�
         and "loadMarket" in usrc and "mchip" in usrc
         and "genTopics(hot)" in usrc and "'/api/market'" in usrc)
 print("44) 市场热词抓取与注入:", ok44)
+
+# 45) 灵感页二期：主编力签抓取并注入选题，热门故事带题材组合；作品榜字体反爬不抓
+m_picks = prompts.topic_messages([], [], line="悬疑",
+                                 picks=[{"title": "机甲文", "pitch": "好写有量"}])[1]["content"]
+m_cats = prompts.topic_messages([], [], line="悬疑",
+                                story_cats=["婚姻家庭·养崽文·家庭·现代"])[1]["content"]
+gsrc = io.open("generator.py", encoding="utf-8").read()
+ok45 = ("主编力签" in msrc and "_JS_PICKS" in msrc
+        and "recommend-item-content-title" in msrc
+        and "hot-story-card" in msrc and "extra__category" in msrc
+        and "黑马飙升" in msrc and "save_market_picks" in msrc
+        and callable(db.save_market_picks) and callable(db.latest_market_picks)
+        and "字体反爬" in msrc
+        and "主编力签" in m_picks and "机甲文——好写有量" in m_picks
+        and "题材·标签组合" in m_cats and "婚姻家庭·养崽文" in m_cats
+        and "主编力签" not in prompts.topic_messages([], [], line="悬疑")[1]["content"]
+        and "latest_market_picks" in gsrc and "注入主编力签" in gsrc
+        and "latest_market_picks" in asrc
+        and "market-picks" in usrc and "market-cats" in usrc
+        and "mrow" in usrc and "市场情报·作家后台灵感页" in usrc)
+print("45) 主编力签与题材组合:", ok45)

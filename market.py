@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """市场情报抓取：通过发布助手浏览器（已登录）读取番茄作家后台的
-灵感页——书荒热词榜（男频/女频 × 脑洞/传统）与热门故事，存入本地库。
-只读页面内容，不做任何写操作。"""
+灵感页——书荒热词榜（男频/女频 × 脑洞/传统）、主编力签（编辑求稿方向）
+与热门故事（含题材标签，全部/黑马飙升/经典高热三个子榜），存入本地库。
+只读页面内容，不做任何写操作。
+（原创作品榜的标题做了字体反爬，抓出来是乱码，故不抓。）"""
 import json
 import subprocess
 import time
@@ -10,8 +12,8 @@ import db
 import paths
 
 CDP_STATE = paths.DATA_DIR / "browser_cdp.json"
-INSPIRATION_URL = ("https://fanqienovel.com/main/writer/inspiration"
-                   "?enter_from=have_book&type=0")
+BASE_URL = "https://fanqienovel.com/main/writer/inspiration?enter_from=have_book"
+INSPIRATION_URL = BASE_URL + "&type=0"
 
 
 def _cdp_alive(port):
@@ -99,18 +101,44 @@ _JS_BOARD = """() => {
   return out;
 }"""
 
+_JS_PICKS = """() => {
+  const out = [];
+  const seen = new Set();
+  for (const t of document.querySelectorAll(
+      '[class*=recommend-item-content-title]')) {
+    const title = (t.textContent || '').trim();
+    if (!title || seen.has(title)) continue;
+    seen.add(title);
+    let box = t.parentElement, pitch = '', desc = '';
+    for (let i = 0; i < 6 && box; i++) {
+      const e = box.querySelector('[class*=content-edit]');
+      const d = box.querySelector('[class*=content-desc]');
+      if (e || d) {
+        pitch = e ? (e.textContent || '').trim() : '';
+        desc = d ? (d.textContent || '').trim() : '';
+        break;
+      }
+      box = box.parentElement;
+    }
+    out.push({title, pitch, desc});
+  }
+  return out.slice(0, 12);
+}"""
+
 _JS_STORIES = """() => {
   const out = [];
   const seen = new Set();
-  for (const a of document.querySelectorAll('a, [class*=title], [class*=name]')) {
-    const t = (a.textContent || '').trim();
-    if (t.length >= 6 && t.length <= 30 && /[\\u4e00-\\u9fa5]/.test(t)
-        && !seen.has(t)) {
-      seen.add(t);
-      out.push(t);
-    }
+  for (const card of document.querySelectorAll('[class*=hot-story-card]')) {
+    const t = card.querySelector('[class*=__title]');
+    if (!t) continue;
+    const c = card.querySelector('[class*=__category]');
+    const title = (t.textContent || '').trim();
+    if (!title || seen.has(title)) continue;
+    seen.add(title);
+    out.push({title,
+              cats: c ? (c.textContent || '').trim() : ''});
   }
-  return out.slice(0, 30);
+  return out.slice(0, 40);
 }"""
 
 
@@ -126,6 +154,18 @@ def _click_text_js(pg, txt):
     }""", txt)
 
 
+def _wait_render(pg, selector, timeout_s=15):
+    """等 SPA 内容真正渲染出来（固定 sleep 会撞上没渲染完）。"""
+    for _ in range(int(timeout_s * 2)):
+        try:
+            if pg.locator(selector).count():
+                return True
+        except Exception:
+            pass
+        pg.wait_for_timeout(500)
+    return False
+
+
 def scrape(log=print):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
@@ -135,11 +175,16 @@ def scrape(log=print):
             pg = ctx.new_page()
             log("打开灵感页（书荒热词榜）…")
             pg.goto(INSPIRATION_URL, wait_until="domcontentloaded")
-            for _ in range(30):
-                if pg.locator("text=书荒热词榜").count():
+            for _ in range(15):
+                if "/writer/login" not in pg.url and "passport" not in pg.url:
                     break
                 pg.wait_for_timeout(1000)
-            pg.wait_for_timeout(1500)
+            if "/writer/login" in pg.url or "passport" in pg.url:
+                raise RuntimeError(
+                    "助手浏览器登录已过期：请在打开的浏览器窗口里重新登录番茄账号"
+                    "（验证码自己输），然后再点「抓取」")
+            if not _wait_render(pg, "text=书荒热词榜", 30):
+                log("⚠ 灵感页加载异常，热词榜可能为空")
 
             rows = []
             for board in ("男频", "女频"):
@@ -157,11 +202,32 @@ def scrape(log=print):
                     log(f"{board}·{kind}：{len(got)} 词")
             pg.wait_for_timeout(500)
 
+            picks = []
+            log("打开灵感页（主编力签）…")
+            pg.goto(BASE_URL + "&type=2", wait_until="domcontentloaded")
+            if _wait_render(pg, "[class*=recommend-item-content-title]"):
+                picks = pg.evaluate(_JS_PICKS) or []
+                log(f"主编力签：{len(picks)} 条")
+            else:
+                log("⚠ 主编力签内容没渲染出来，本次为空")
+
             stories = []
-            if _click_text_js(pg, "热门故事"):
-                pg.wait_for_timeout(2000)
-                stories = pg.evaluate(_JS_STORIES) or []
-                log(f"热门故事：{len(stories)} 条")
+            log("打开灵感页（热门故事）…")
+            pg.goto(BASE_URL + "&type=3", wait_until="domcontentloaded")
+            if _wait_render(pg, "[class*=hot-story-card]"):
+                for sub in ("全部", "黑马飙升", "经典高热"):
+                    if not _click_text_js(pg, sub):
+                        log(f"⚠ 没找到子榜「{sub}」，跳过")
+                        continue
+                    pg.wait_for_timeout(1800)
+                    got = pg.evaluate(_JS_STORIES) or []
+                    for g in got:
+                        g["subtab"] = sub
+                    seen_t = {g["title"] for g in stories}
+                    stories.extend(g for g in got if g["title"] not in seen_t)
+                    log(f"热门故事·{sub}：{len(got)} 条")
+            else:
+                log("⚠ 热门故事内容没渲染出来，本次为空")
             try:
                 pg.close()
             except Exception:
@@ -172,9 +238,9 @@ def scrape(log=print):
             except Exception:
                 pass
 
-    if rows:
-        db.save_market_words(rows)
-    if stories:
-        db.save_market_stories(stories)
-    log(f"✓ 已入库：热词 {len(rows)} 个，热门故事 {len(stories)} 条")
-    return {"words": len(rows), "stories": len(stories)}
+    db.save_market_words(rows)
+    db.save_market_picks(picks)
+    db.save_market_stories(stories)
+    log(f"✓ 已入库：热词 {len(rows)} 个，主编力签 {len(picks)} 条，"
+        f"热门故事 {len(stories)} 条")
+    return {"words": len(rows), "picks": len(picks), "stories": len(stories)}
