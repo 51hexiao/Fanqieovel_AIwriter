@@ -56,6 +56,15 @@ CREATE TABLE IF NOT EXISTS bench(
   body TEXT DEFAULT '', data_json TEXT DEFAULT '',
   created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS market_words(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  board TEXT, kind TEXT, word TEXT, rank INTEGER, trend TEXT,
+  captured_at TEXT
+);
+CREATE TABLE IF NOT EXISTS market_stories(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT, captured_at TEXT
+);
 CREATE TABLE IF NOT EXISTS bench_reports(
   line TEXT PRIMARY KEY, data_json TEXT DEFAULT '', created_at TEXT
 );
@@ -188,6 +197,50 @@ def save_topics(items, source="combo"):
             t["source"] = source
             c.execute("INSERT INTO topics(data_json,created_at) VALUES(?,?)",
                       (json.dumps(t, ensure_ascii=False), now()))
+
+
+def save_market_words(rows):
+    """整批替换当前快照（市场数据只留最新一期）。"""
+    ts = now()
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM market_words")
+        c.executemany(
+            "INSERT INTO market_words(board,kind,word,rank,trend,captured_at)"
+            " VALUES(?,?,?,?,?,?)",
+            [(r.get("board", ""), r.get("kind", ""), r.get("word", ""),
+              int(r.get("rank") or 0), r.get("trend", ""), ts)
+             for r in rows])
+        return len(rows)
+
+
+def save_market_stories(titles):
+    ts = now()
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM market_stories")
+        c.executemany("INSERT INTO market_stories(title,captured_at) VALUES(?,?)",
+                      [(t, ts) for t in titles])
+        return len(titles)
+
+
+def market_captured_at():
+    with _lock, _conn() as c:
+        row = c.execute(
+            "SELECT captured_at FROM market_words ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return row["captured_at"] if row else None
+
+
+def latest_market_words(limit=80):
+    with _lock, _conn() as c:
+        return [dict(r) for r in c.execute(
+            "SELECT board,kind,word,rank,trend,captured_at FROM market_words"
+            " ORDER BY board,kind,rank LIMIT ?", (limit,))]
+
+
+def latest_market_stories(limit=30):
+    with _lock, _conn() as c:
+        return [r["title"] for r in c.execute(
+            "SELECT title FROM market_stories ORDER BY id LIMIT ?", (limit,))]
 
 
 def add_topic(title, hook="", social="", hot="", diff="", line="悬疑"):

@@ -72,6 +72,11 @@ button.mini{padding:3px 10px;font-size:12px}
 .s-item .s-m{display:flex;align-items:center;gap:6px;font-size:11.5px;overflow:hidden}
 .s-item .s-m .dim{white-space:nowrap}
 .s-item .s-acts{margin-left:auto;display:flex;gap:4px;white-space:nowrap}
+.mchip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;margin:0 6px 6px 0;
+  border:1px solid var(--line);border-radius:999px;cursor:pointer;font-size:12.5px}
+.mchip:hover{border-color:var(--acc);color:var(--acc)}
+.mchip i{font-style:normal;font-size:10.5px;color:var(--dim)}
+.mchip b{font-weight:600;font-size:10.5px;color:var(--green)}
 .s-item .s-d{font-size:11px;color:var(--dim);margin-top:6px}
 /* 流程可视化：编辑器顶部流水线 + 质量证据 + 分层操作 */
 .pipe{display:flex;align-items:center;margin:2px 0 12px}
@@ -231,6 +236,16 @@ details.t-more .t-meta{margin-bottom:0}
     <span class="lsep"></span>
     <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
     <span class="status" id="topics-status"></span>
+  </div>
+  <div class="card" id="market-card">
+    <div class="qc-head" style="display:flex;align-items:center;gap:8px;margin:0 0 8px;border-top:none;padding:0">
+      <b>市场热词·书荒榜</b>
+      <span class="hint">读者求书多、在写的人少——选题贴这些词更易被看见；生成选题会自动贴靠</span>
+      <span style="flex:1"></span>
+      <span class="hint" id="market-time"></span>
+      <button class="fbtn" onclick="scrapeMarket()" title="用发布助手浏览器打开作家后台灵感页抓取（浏览器需登录过番茄）">↻ 抓取</button>
+    </div>
+    <div id="market-words" class="hint">还没抓取：点「抓取」，助手浏览器会打开灵感页读榜（约 20 秒）。</div>
   </div>
   <div class="bar" style="align-items:center">
     <button class="primary" onclick="openTopicModal()">＋ 手动录入选题</button>
@@ -481,7 +496,7 @@ function showTab(name) {
   ['topics','stories','bench','settings'].forEach(t => $('#tab-' + t).hidden = (t !== name));
   document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
   $('#global-status').textContent = '当前：' + {topics:'选题', stories:'稿件', bench:'拆解', settings:'设置'}[name];
-  if (name === 'topics') loadTopics();
+  if (name === 'topics') { loadTopics(); loadMarket(); }
   if (name === 'stories') loadStories();
   if (name === 'bench') loadBench();
   if (name === 'settings') { loadConfig(); loadCats(); }
@@ -592,16 +607,37 @@ async function loadTopics() {
   }).join('') : '<p class="hint">选题库是空的——随机生成，或在上方输入框录自己的点子</p>';
   updateSelBar();
 }
-function _topicTask(url, busyMsg, doneMsg) {
+function _topicTask(url, busyMsg, doneMsg, payload, doneExtra) {
   const st = $('#topics-status');
   busy(st, busyMsg);
-  api(url, {method: 'POST', body: JSON.stringify({line: curLine})})
+  api(url, {method: 'POST', body: JSON.stringify(payload || {line: curLine})})
     .then(r => poll(r.task_id, s => busy(st, s)))
-    .then(() => { idle(st, doneMsg, 'ok'); loadTopics(); })
+    .then(() => { idle(st, doneMsg, 'ok'); loadTopics(); if (doneExtra) doneExtra(); })
     .catch(e => idle(st, '✗ ' + e.message, 'err'));
 }
-async function genTopics() {
-  _topicTask('/api/topics/generate', '随机生成选题中…', '✓ 完成，已放入选题库');
+async function genTopics(hot) {
+  const w = typeof hot === 'string' ? hot.trim() : '';
+  _topicTask('/api/topics/generate',
+             w ? ('围绕「' + w + '」出选题中…') : '随机生成选题中…',
+             '✓ 完成，已放入选题库', {line: curLine, hot: w});
+}
+async function loadMarket() {
+  try {
+    const m = await api('/api/market');
+    const el = $('#market-words');
+    $('#market-time').textContent =
+      m.captured_at ? ('抓取于 ' + String(m.captured_at).slice(5, 16)) : '';
+    if (!m.words || !m.words.length) return;
+    el.innerHTML = m.words.map(w =>
+      `<span class="mchip" title="${esc(w.board)}·${esc(w.kind)} 第${w.rank}名"`
+      + ` onclick="genTopics('${esc(w.word)}')">`
+      + `${esc(w.word)}<i>${w.rank}</i>${w.trend ? `<b>${esc(w.trend)}</b>` : ''}</span>`).join('')
+      + '<div class="hint" style="margin-top:6px">点任意词 = 围绕它出 6 个选题；🎲 随机生成则自动贴靠整榜。</div>';
+  } catch (e) {}
+}
+function scrapeMarket() {
+  return _topicTask('/api/market/scrape', '抓取市场热词中（浏览器会自动打开灵感页）…',
+                    '✓ 热词已入库', {line: curLine}, loadMarket);
 }
 function openTopicModal() {
   $('#topic-modal').hidden = false;

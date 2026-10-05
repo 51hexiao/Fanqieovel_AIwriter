@@ -45,7 +45,7 @@ def _ln(line):
     return pools.LINE_NAMES.get(line, line)
 
 
-def _gen_line_topics(n, log, line):
+def _gen_line_topics(n, log, line, hot=""):
     recent = [f"{t.get('title', '')}（{t.get('combo', '')}）"
               for t in db.recent_topics(30)]
     bench = db.bench_examples(line, 8)
@@ -65,8 +65,13 @@ def _gen_line_topics(n, log, line):
         seen.add(sig)
         combos.append(c)
     log(f"调用模型生成{_ln(line)}选题（{n} 个）…")
+    hot_words = [hot] if hot else [
+        w['word'] for w in db.latest_market_words(14)]
+    if hot_words:
+        log('注入书荒热词：' + '、'.join(hot_words[:8]))
     data = llm.ask_json(prompts.topic_messages(combos, recent, line,
-                                          bench_titles=titles or None),
+                                          bench_titles=titles or None,
+                                          hot_words=hot_words or None),
                    temperature=1.0, max_tokens=3000, log=log, want_list=True, item_key="title")
     items = _as_list(data)[:n]
     out = []
@@ -86,9 +91,10 @@ def _gen_line_topics(n, log, line):
     return out
 
 
-def gen_topics(n=6, log=print, line="悬疑"):
-    """line：悬疑（无脑爽文）/ 温情（人间烟火）/ 严谨（细腻写实·强逻辑）/ 二创（二创改编）。"""
-    return _gen_line_topics(n, log, line)
+def gen_topics(n=6, log=print, line="悬疑", hot=""):
+    """line：悬疑（无脑爽文）/ 温情（人间烟火）/ 严谨（细腻写实·强逻辑）/ 二创（二创改编）。
+    hot：书荒热词（市场抓取），有则围绕它定向出选题。"""
+    return _gen_line_topics(n, log, line, hot=hot)
 
 
 # 字数档位：每节目标字数（全文固定 5 节，实际成稿通常为目标 7~9 成）

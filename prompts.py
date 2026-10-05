@@ -209,7 +209,8 @@ def bench_report_messages(digests, n, line):
 """ + digests)
     return [{"role": "system", "content": SYS_BENCH},
             {"role": "user", "content": user}]
-def topic_messages(combos, recent, line="悬疑", bench_titles=None):
+def topic_messages(combos, recent, line="悬疑", bench_titles=None,
+                   hot_words=None):
     import pools
     roles = "、".join(pools.CAT["角色"])
     if line == "温情":
@@ -279,6 +280,11 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None):
     if bench_titles:
         bench_block = ("\n【同赛道爆款标题参考：只学句式和钩子，禁止抄情节和用词】\n"
                        + "\n".join("- " + t for t in bench_titles[:8]) + "\n")
+    hot_block = ""
+    if hot_words:
+        hot_block = ("\n【平台书荒热词（读者求书多、在写的人少，官方榜数据；\n"
+                     "\n选题尽量自然贴靠与本题相关的词，别生硬堆词）】\n"
+                     + "、".join(hot_words[:14]) + "\n")
     user = f"""请为下面 {len(combos)} 个组合各设计 1 个短故事选题。
 
 【本次组合】
@@ -286,7 +292,7 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None):
 
 【组合说明】主分类/情节/情绪/背景取自番茄发布页官方分类（经过平台审核、决定流量分发），选题必须落在这些标签的读者预期里；官方角色标签（人物设定可择一自然融入，不要生硬贴标签）：{roles}；人设=主角姿态，记住爽文铁律：憋屈让读者受，主角保持清醒或无欲无求，最终胜利属于主角；底牌=逆袭引擎。这些写法约束用于保证选题不撞车。
 
-{bench_block}
+{bench_block}{hot_block}
 {_recent_block(recent)}
 
 每个选题输出一个JSON对象：{schema}

@@ -701,3 +701,30 @@ ok43 = ("封面制作" in asrc and "完成制作" in asrc and "_cover_open" in a
         and "直接发布" in usrc and "auto_publish" in usrc
         and "自动标记" in usrc)
 print("43) 封面勾选自动补全:", ok43)
+
+# 44) 市场热词：灵感页抓取入库 + 生成注入 + 选题页面板（抓取按钮/榜单chips/单点出题）
+msrc = io.open("market.py", encoding="utf-8").read()
+gsrc = io.open("generator.py", encoding="utf-8").read()
+psrc = io.open("prompts.py", encoding="utf-8").read()
+m_hot = prompts.topic_messages([], [], line="悬疑",
+                               hot_words=["单女主", "末世"])[1]["content"]
+m_nothot = prompts.topic_messages([], [], line="悬疑")[1]["content"]
+db.save_market_words([{"board": "男频", "kind": "脑洞", "word": "热词校验ZZZ",
+                       "rank": 1, "trend": "新"}])
+_back = db.latest_market_words(5)
+db.save_market_words([])
+ok44 = ("INSPIRATION_URL" in msrc and "书荒热词榜" in msrc and "热门故事" in msrc
+        and "男频" in msrc and "女频" in msrc and "dispatchEvent" in msrc
+        and any(w["word"] == "热词校验ZZZ" for w in _back)
+        and callable(db.save_market_stories)
+        and callable(db.latest_market_stories)
+        and "latest_market_words" in gsrc and "注入书荒热词" in gsrc
+        and "hot_words" in psrc
+        and "平台书荒热词" in m_hot and "单女主" in m_hot
+        and "平台书荒热词" not in m_nothot
+        and 'get("hot")' in asrc and "/api/market" in asrc
+        and "/api/market/scrape" in asrc
+        and "market-card" in usrc and "scrapeMarket" in usrc
+        and "loadMarket" in usrc and "mchip" in usrc
+        and "genTopics(hot)" in usrc and "'/api/market'" in usrc)
+print("44) 市场热词抓取与注入:", ok44)

@@ -109,8 +109,24 @@ def get_topics(status: Optional[str] = None, line: Optional[str] = None):
 @app.post("/api/topics/generate")
 def gen_topics(payload: Optional[dict] = None):
     line = (payload or {}).get("line") or "悬疑"
+    hot = ((payload or {}).get("hot") or "").strip()
     return start_task("topics",
-                      lambda log: generator.gen_topics(log=log, line=line))
+                      lambda log: generator.gen_topics(log=log, line=line,
+                                                       hot=hot))
+
+
+# ---------- 市场热词（作家后台灵感页抓取） ----------
+@app.get("/api/market")
+def get_market():
+    return {"words": db.latest_market_words(120),
+            "stories": db.latest_market_stories(30),
+            "captured_at": db.market_captured_at()}
+
+
+@app.post("/api/market/scrape")
+def scrape_market():
+    import market
+    return start_task("market", lambda log: market.scrape(log=log))
 
 
 class TopicIn(BaseModel):
