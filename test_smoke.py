@@ -687,13 +687,17 @@ print("42) 填稿拟人化节奏:", ok42)
 
 # 43) 表单补全：封面模板入口自动点、声明/分类自动勾、发布按钮留人工
 ok43 = ("封面制作" in asrc and "完成制作" in asrc and "_cover_open" in asrc
+        and "publish-short-category-select" in asrc and "arco-dropdown" in asrc
+        and "悬疑惊悚" in asrc and "_js(" in asrc
+        and 'name="下一步"' in asrc and "页面提示" in asrc
+        and "我已阅读并同意" in asrc and "请设置后再提交发布" in asrc
         and "是否使用AI" in asrc
-        and "请选择作品分类" in asrc and "去设置" in asrc
+        and "publish-short-category-select-selected" in asrc and "去设置" in asrc
         and "我已阅读" in asrc and "auto_publish" in asrc
         and "确认发布" in asrc and "如实申报" in asrc
         and "_click_text" in asrc
         and "已直接发布，工作台已自动标记为已发布" in asrc
-        and "请手动发布" in asrc
+        and "已改点「存草稿」" in asrc
         and "直接发布" in usrc and "auto_publish" in usrc
         and "自动标记" in usrc)
 print("43) 封面勾选自动补全:", ok43)

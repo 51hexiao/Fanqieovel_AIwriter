@@ -369,6 +369,14 @@ def _pick_body(ed):
     return best if best is not None else ed.locator("textarea").first
 
 
+def _js(pg, expr, arg=None):
+    """在页面里执行 JS（返回 JSON 值）；用于 React 合成组件的兜底操作。"""
+    try:
+        return pg.evaluate(expr, arg)
+    except Exception:
+        return None
+
+
 def _cover_open(editor):
     """「完成制作」按钮还可见，说明封面弹窗没关。"""
     try:
@@ -558,32 +566,57 @@ def _auto_draft(ctx, page, s, log):
         log("⚠ AI 声明未自动选择，请手动点「是」")
     editor.wait_for_timeout(400 + random.randint(0, 400))
 
-    # 4.7) 作品分类：点开下拉，按风格线选主分类（最多可手动补到 8 个）
+    # 4.7) 作品分类：自定义下拉（列表高度为 0，普通定位点不到）→ JS 派发点击选主分类
+    cat_map = {"悬疑": ["悬疑惊悚"], "温情": ["婚姻家庭", "女生生活", "都市日常"],
+               "严谨": ["都市日常", "年代", "女生生活"], "二创": ["女频衍生", "男频衍生"]}
+    cands = cat_map.get(line, [line] if line else [])
     picked_cat = None
     try:
-        dd = editor.get_by_text("请选择作品分类").first
-        if _visible(dd):
-            _human_click(editor, dd)
-            editor.wait_for_timeout(900 + random.randint(0, 500))
-            for kw in cat_keys:
-                opt = editor.get_by_text(kw, exact=True)
-                if not opt.count():
-                    opt = editor.get_by_text(kw, exact=False)
-                if opt.count() and _visible(opt.last):
-                    _human_click(editor, opt.last)
-                    picked_cat = kw
-                    editor.wait_for_timeout(700)
-                    break
-            if picked_cat:
-                for key in ("确定", "下一步"):
-                    if _click_text(editor, key, exact=True, pick="last"):
-                        editor.wait_for_timeout(600)
-                        break
-                log(f"✓ 主分类已选：{picked_cat}（想多加分类可手动补）")
-            else:
-                log("⚠ 分类下拉里没匹配到风格线关键词，请手动选主分类")
+        cur = _js(editor, """() => [...document.querySelectorAll(
+            '.publish-short-category-select-selected')]
+            .map(e => (e.textContent || '').trim())""") or []
+        if any(c in cur for c in cands):
+            picked_cat = next(c for c in cands if c in cur)
+            log(f"✓ 主分类已有：{picked_cat}")
         else:
-            log("⚠ 未找到「请选择作品分类」入口，请手动选")
+            # 清掉不在候选里的旧标签（自动建的稿子，标签由程序做主）
+            _js(editor, """() => {
+              for (const t of document.querySelectorAll(
+                      '.publish-short-category-select-selected')) {
+                const svg = t.querySelector('svg');
+                if (svg) svg.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+              }
+              return true;
+            }""")
+            editor.wait_for_timeout(500)
+            opened = _js(editor, """() => {
+              const el = document.querySelector('.publish-short-category-select');
+              if (!el) return false;
+              el.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+              return true;
+            }""")
+            editor.wait_for_timeout(1400 + random.randint(0, 500))
+            for kw in cands:
+                hit = _js(editor, """(name) => {
+                  const panel = [...document.querySelectorAll('.arco-dropdown')]
+                    .find(e => e.offsetParent !== null);
+                  if (!panel) return false;
+                  const item = [...panel.querySelectorAll(
+                      '.publish-short-category-select-item')]
+                    .find(e => (e.textContent || '').trim() === name);
+                  if (!item) return false;
+                  item.dispatchEvent(new MouseEvent('click', {bubbles: true}));
+                  return true;
+                }""", kw)
+                if hit:
+                    picked_cat = kw
+                    break
+            editor.mouse.click(30, 300)  # 点空白收起下拉
+            editor.wait_for_timeout(500)
+            if picked_cat:
+                log(f"✓ 主分类已选：{picked_cat}（想多加标签可手动补）")
+            else:
+                log("⚠ 主分类未选上（下拉里没找到候选分类），请手动选")
     except Exception:
         log("⚠ 作品分类未自动选择，请手动选")
 
@@ -619,7 +652,7 @@ def _auto_draft(ctx, page, s, log):
     if checked:
         log(f"✓ 自动勾选 {checked} 项：{'、'.join(picked[:4])}{'…' if len(picked) > 4 else ''}")
 
-    # 4.9) 试读比例：去设置 → 选一档 → 确定（结构未知则 Esc 收场，不碍发布）
+    # 4.9) 试读比例：发布必填（平台拦截语「请设置后再提交发布」）
     try:
         tr = editor.get_by_text("去设置", exact=True).first
         if _visible(tr):
@@ -644,51 +677,82 @@ def _auto_draft(ctx, page, s, log):
                 log(f"✓ 试读比例已设为 {set_pct}（可手动改）")
             else:
                 editor.keyboard.press("Escape")
-                log("试读比例未自动设置（结构未知），需要的话手动设一下")
+                log("⚠ 试读比例未自动设置（弹窗结构未知）——发布必填，请手动点「去设置」选一档")
     except Exception:
         pass
 
-    # 4.10) 发布协议：勾「我已阅读…」（避开「发布事项」链接文字，不点开文档）
+    # 4.10) 发布协议：真实结构是按钮「我已阅读并同意」
     try:
-        row = editor.locator("xpath=//*[contains(normalize-space(text()),'我已阅读')]").last
-        box = row.locator(
-            "xpath=ancestor::*[.//input[@type='checkbox']][1]//input[@type='checkbox']").first
-        if box.count() and box.is_checked():
-            log("✓ 发布协议已是勾选状态")
-        elif row.count() and _visible(row):
-            _human_click(editor, row)
-            log("✓ 发布协议已勾选")
+        agr = editor.get_by_role("button", name="我已阅读并同意").first
+        if _visible(agr):
+            _human_click(editor, agr)
+            editor.wait_for_timeout(700)
+            log("✓ 已点「我已阅读并同意」")
         else:
-            log("⚠ 未找到发布协议勾选行，请手动勾")
+            row = editor.locator(
+                "xpath=//*[contains(normalize-space(text()),'我已阅读')]").last
+            if _visible(row):
+                _human_click(editor, row)
+                log("✓ 发布协议已勾选")
+            else:
+                log("⚠ 未找到发布协议入口，请手动")
     except Exception:
-        log("⚠ 发布协议未自动勾选，请手动勾")
+        log("⚠ 发布协议未自动处理，请手动")
 
-    # 5) 发布（auto_publish=false 则退回只存草稿）＋确认弹窗＋结果核对
+    # 5) 下一步 → 发布（auto_publish=false 则退回只存草稿）
     cfg = {}
     try:
         cfg = json.loads((paths.DATA_DIR / "config.json").read_text(encoding="utf-8"))
     except Exception:
         cfg = {}
     if cfg.get("auto_publish", True):
-        log("点击「发布」…")
+        # 5a) 第一步页没有「发布」按钮，先点「下一步」
+        log("点击「下一步」进入发布…")
+        nxt = editor.get_by_role("button", name="下一步").first
+        try:
+            if _visible(nxt) and nxt.is_enabled():
+                _human_click(editor, nxt)
+                editor.wait_for_timeout(2600 + random.randint(0, 900))
+            else:
+                log("⚠ 「下一步」不可点（可能被必填项拦住），直接尝试找发布按钮")
+        except Exception:
+            pass
+        # 5b) 第二步可能同页也可能是新标签，重取最新编辑页
+        try:
+            for pg2 in ctx.pages:
+                if pg2 is not editor and "publish-short" in pg2.url:
+                    editor = pg2
+            editor.bring_to_front()
+        except Exception:
+            pass
+        # 5c) 页面 toast（必填拦截原因会在这里）
+        try:
+            t = editor.locator(".arco-message").last
+            if _visible(t):
+                msg = (t.text_content() or "").strip()
+                if msg:
+                    log(f"页面提示：{msg}")
+        except Exception:
+            pass
+        # 5d) 找发布按钮
         pub = editor.get_by_role(
             "button", name=_re.compile(r"^(发布|发布作品|立即发布|提交发布|提交)$")).first
         clicked = False
         try:
-            if _visible(pub):
+            if _visible(pub) and pub.is_enabled():
                 _human_click(editor, pub)
                 clicked = True
         except Exception:
             clicked = False
         if not clicked:
-            for el in editor.locator("button, [role='button']").all():
+            for el in editor.locator("button").all():
                 try:
                     t = (el.inner_text() or "").strip()
                 except Exception:
                     continue
                 if t not in ("发布", "发布作品", "立即发布", "提交发布", "提交"):
                     continue
-                if not _visible(el):
+                if not _visible(el) or not el.is_enabled():
                     continue
                 try:
                     lab = el.evaluate(
@@ -701,7 +765,7 @@ def _auto_draft(ctx, page, s, log):
                 clicked = True
                 break
         if not clicked:
-            log("⚠ 未找到「发布」按钮，已改点「存草稿」，请手动发布")
+            log("⚠ 未找到「发布」按钮：可能被必填项拦住（见上方页面提示），已改点「存草稿」")
             _click_text(editor, "存草稿", exact=False)
             return
         editor.wait_for_timeout(1000 + random.randint(0, 600))
