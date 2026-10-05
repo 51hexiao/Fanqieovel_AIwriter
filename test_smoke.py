@@ -869,3 +869,9 @@ ok51 = ("_edPoll" in usrc and "stopEdPoll" in usrc
         and "s.status === 'generating'" in usrc
         and usrc.count("stopEdPoll()") >= 4)
 print("51) 编辑器生成中自动刷新:", ok51)
+
+# 52) 主线按钮统一为「下一步 · xx」，编辑/导出全流程常驻
+ok52 = ("'下一步 · 批准入库'" in usrc and "'下一步 · 打开发布助手'" in usrc
+        and "saveStory()" in usrc and "doExport()" in usrc
+        and "'primary ed-cta'" in usrc)
+print("52) 下一步主线按钮:", ok52)
