@@ -890,3 +890,12 @@ ok53 = ("rebuild_body" in dbsrc and '/api/stories/{sid}/rebuild' in asrc
         and "生成中不接受正文修改" in asrc
         and "readOnly = s.status === 'generating'" in usrc)
 print("53) 防旧快照覆盖丢稿:", ok53)
+
+# 54) 一键全自动：顺序跑质检→审稿→修稿→入库，免确认；失败中断保留进度；发布仍手动
+ok54 = ("function autoRun" in usrc and "▶ 一键全自动" in usrc
+        and "() => doReview(true)" in usrc and "() => doPolish(true)" in usrc
+        and "() => approve(true)" in usrc and "_autoBusy" in usrc
+        and "if (auto) throw e" in usrc
+        and "ed-auto" in usrc
+        and "没有可执行的意见，跳过修稿" in usrc)
+print("54) 一键全自动:", ok54)

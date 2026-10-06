@@ -145,6 +145,8 @@ button.mini{padding:3px 10px;font-size:12px}
 .p-ev .good{color:var(--green)}
 .p-ev .bad{color:var(--red)}
 .ed-sub{padding:6px 12px;font-size:12.5px;color:var(--muted);background:transparent}
+.ed-auto{padding:6px 12px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--acc-dim);border-color:transparent}
+.ed-auto:hover{border-color:var(--acc);color:var(--acc)}
 .ed-danger{margin-left:auto;padding:6px 12px;font-size:12.5px;color:var(--red);background:none;border-color:transparent}
 .ed-danger:hover{border-color:var(--red);color:var(--red)}
 /* 编辑器右侧：审查结果独立栏（列表 | 正文 | 报告 三列布局） */
@@ -400,6 +402,7 @@ details.t-more .t-meta{margin-bottom:0}
           <span style="flex:1"></span>
           <button class="ed-sub" onclick="saveStory()">保存修改</button>
           <button class="ed-sub" onclick="doExport()">导出TXT</button>
+          <button class="ed-auto" onclick="autoRun()" title="自动顺序执行：质检 → 审稿 → 修稿 → 入库，全程无需确认；发布仍由你手动点。任一步失败会停下并保留已完成步骤，可单独重试">▶ 一键全自动</button>
           <button class="ed-danger" onclick="rejectStory()" title="作废这篇稿件，可在「已废弃」栏彻底删除">废弃</button>
         </div>
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
@@ -1074,7 +1077,7 @@ async function doQC() {
   await openStory(curId);
   idle($('#ed-status'), '✓ 质检完成', 'ok');
 }
-async function doReview() {
+async function doReview(auto) {
   await saveStory();
   const st = $('#ed-status');
   busy(st, 'AI审稿中…');
@@ -1083,17 +1086,22 @@ async function doReview() {
     await poll(task_id, s => busy(st, s));
     await openStory(curId);
     idle(st, '✓ 审稿完成', 'ok');
-  } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
+  } catch (e) {
+    if (auto) throw e;
+    idle(st, '✗ ' + e.message, 'err');
+  }
 }
-async function doPolish() {
+async function doPolish(auto) {
   const st = $('#ed-status');
   const note = $('#ed-note').value.trim();
   const s = await api('/api/stories/' + curId);
-  if (!note && !_pj(s.review_json) && !_pj(s.qc_json)) {
-    idle(st, '✗ 没有可执行的意见：先点「质检」或「审稿」，或在下方「作者意见」框写清楚要改的点', 'err');
+  const rv = _pj(s.review_json) || {}, qcp = _pj(s.qc_json) || {};
+  if (!note && !(rv.issues || []).length && !(qcp.issues || []).length) {
+    idle(st, auto ? '－ 没有可执行的意见，跳过修稿'
+                  : '✗ 没有可执行的意见：先点「质检」或「审稿」，或在下方「作者意见」框写清楚要改的点', auto ? '' : 'err');
     return;
   }
-  if (!confirm('修稿会按意见重写正文：作者意见最高优先级，其次AI审稿清单、质检硬伤；情节主干不变。继续？')) return;
+  if (!auto && !confirm('修稿会按意见重写正文：作者意见最高优先级，其次AI审稿清单、质检硬伤；情节主干不变。继续？')) return;
   await saveStory();
   busy(st, '按意见修稿中…');
   try {
@@ -1101,15 +1109,41 @@ async function doPolish() {
     await poll(task_id, x => busy(st, x));
     await openStory(curId);
     idle(st, '✓ 修稿完成，请通读检查', 'ok');
-  } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
+  } catch (e) {
+    if (auto) throw e;
+    idle(st, '✗ ' + e.message, 'err');
+  }
 }
-async function approve() {
-  if (!confirm('确认批准入库？')) return;
+async function approve(auto) {
+  if (!auto && !confirm('确认批准入库？')) return;
   await saveStory();
   await api(`/api/stories/${curId}/approve`, {method: 'POST'});
   await openStory(curId);
   idle($('#ed-status'), '✓ 已批准入库，人名已登记', 'ok');
   loadStories();
+}
+let _autoBusy = false;
+async function autoRun() {
+  if (_autoBusy || !curId) return;
+  const st = $('#ed-status');
+  const s0 = await api('/api/stories/' + curId);
+  if (s0.status !== 'generated') {
+    idle(st, '只有「待处理」（刚写完、还没入库）的稿件能一键全自动；已入库的请直接点「发布」', 'err');
+    return;
+  }
+  _autoBusy = true;
+  const steps = [['质检', () => doQC(true)], ['审稿', () => doReview(true)], ['修稿', () => doPolish(true)], ['入库', () => approve(true)]];
+  try {
+    for (let i = 0; i < steps.length; i++) {
+      busy(st, `▶ 全自动 ${i + 1}/4：${steps[i][0]}中…`);
+      try { await steps[i][1](); }
+      catch (e) {
+        idle(st, `✗ 自动流程在「${steps[i][0]}」中断：${e.message}（已完成步骤保留，可单独重试）`, 'err');
+        return;
+      }
+    }
+    idle(st, '✓ 全自动完成：质检→审稿→修稿→入库；点步骤⑥「发布」进入发布助手', 'ok');
+  } finally { _autoBusy = false; }
 }
 async function markPublished() {
   await api(`/api/stories/${curId}/status`, {method: 'POST', body: JSON.stringify({status: 'published'})});
