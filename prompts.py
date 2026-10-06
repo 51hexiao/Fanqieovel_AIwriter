@@ -670,6 +670,17 @@ def outline_messages(topic, bench_openings=None, market_rules=None):
         else:
             user += ("\n- 补空白模式：故事发生在原作没写的那段空白里，原作大事照常发生，"
                      "主线名场面结局不变、只借势不改写。")
+        import ip_cards
+        _ipn, _card = ip_cards.find_card(str(topic.get("combo") or "") + " " +
+                                         str(topic.get("title") or ""))
+        if _card:
+            user += (f"\n- 本篇IP有内置考据卡（见下方【原作考据卡·{_ipn}】）：base_facts 逐条"
+                     "与卡对齐，卡内没有的设定只有确有把握才列；你记忆里的任何说法与卡冲突时，"
+                     "一律以卡为准。")
+            user += f"\n\n【原作考据卡·{_ipn}（本篇最高依据）】\n{_card}"
+        else:
+            user += ("\n- 考据纪律：本篇IP没有内置考据卡，base_facts 只写你确有把握的原作事实，"
+                     "宁少勿错；拿不准的设定不列、不编，正文也绝口不提。")
         sysmsg = SYS_WRITER_FAN
     else:
         user = f"""围绕下面的选题，写一份可直接执行的写作大纲。
@@ -779,6 +790,12 @@ def section_messages(story, no, total, hooks=None, market_rules=None):
         if bf:
             extra += (f"\n【原作设定速记（最高约束，逐条遵守）】{bf}"
                       "\n本节引用到的原作元素必须与速记及原作设定一致，拿不准的设定不写。")
+        import ip_cards
+        _ipn, _card = ip_cards.find_card(str((story.get("topic") or {}).get("combo", "")) +
+                                         " " + str(story.get("title") or ""))
+        if _card:
+            extra += (f"\n【原作考据卡·{_ipn}（最高依据）】{_card}"
+                      "\n本节引用的每个原作元素必须与考据卡一致；你记忆与卡冲突处，按卡写。")
         hom = o.get("homage") or {}
         items = hom.get("items") if isinstance(hom, dict) else None
         rows = []
@@ -842,7 +859,7 @@ def section_messages(story, no, total, hooks=None, market_rules=None):
 
 
 def review_messages(title, body, line="悬疑", outline_note=None,
-                    market_rules=None):
+                    market_rules=None, combo=""):
     if line == "严谨":
         sysmsg = SYS_REVIEW_RIGOR
         checks = """- 逻辑硬伤（logic_score 从严评，本线生死线）：设定规则前后是否一致——凡出现规则被违反、凭空冒出新能力/新规则救场，把位置写进 issues（type 填"逻辑"）；主角破局用的关键线索是否此前都给过读者——凡天降证据、巧合破案，写进 issues（type 填"逻辑"）；每个反转之前正文里是否已有至少两处伏笔——不足则写进 issues（type 填"逻辑"）；反派与机制是否降智（对手行动在其信息范围内是否合理、副本死亡是否有机制原因、有无剧情杀）；
@@ -856,7 +873,7 @@ def review_messages(title, body, line="悬疑", outline_note=None,
 - AI味：总结腔、排比滥用、段落过碎。没有问题就给空数组。"""
     elif line == "二创":
         sysmsg = SYS_REVIEW_FAN
-        checks = """- 考据（logic_score 从严评）：原作世界观、能力体系、人物关系、时代细节是否与原作设定冲突；凡写错处把位置写进 issues（type 填"考据"）；主角是否夺了原作主角的核心高光、原作名场面的结局是否被改写（是则 type 填"考据"）；
+        checks = """- 考据（logic_score 从严评）：原作世界观、能力体系、人物关系、时代细节是否与原作设定冲突；凡写错处把位置写进 issues（type 填"考据"）；凡引用了你无法确认属于原作的设定或元素，写进 issues（type 填"考据"）并在 detail 里注明"待人工核实"，交人工判断；主角是否夺了原作主角的核心高光、原作名场面的结局是否被改写（是则 type 填"考据"）；若正文末尾注入了【原作考据卡】，以卡为核对依据，与卡冲突即硬伤；
 - 爽感（hook_score 从严评）：开篇前三行是否反常切入；是否出现说明书式科普原作设定（是则 type 填"节奏"）；主角是否全程不内耗——凡出现哭闹上头、自证讨好，写进 issues（type 填"人设"）；每节是否有反击或打脸；当众清算是否解气；
 - 情怀：借用的原作元素是否人人皆知、是否反复出现加深；结尾是否回收情怀元素与标题；
 - 时间与数字是否前后矛盾（天数、时刻、金额）；
@@ -899,6 +916,13 @@ def review_messages(title, body, line="悬疑", outline_note=None,
 
 重点检查：
 {checks}"""
+    if line == "二创":
+        import ip_cards
+        _ipn, _card = ip_cards.find_card(combo or title)
+        if _card:
+            user += (f"\n\n【原作考据卡·{_ipn}（核对依据，优先于你的记忆）】\n{_card}"
+                     "\n正文与卡冲突的写进 issues（type 填'考据'）；卡外且无法确认属于"
+                     "原作的元素，也写进 issues（type 填'考据'）并注明'待人工核实'。")
     if outline_note:
         user += ("\n\n【大纲既定设定（核对正文是否兑现）】\n" + outline_note
                  + "\n未兑现的写进 issues（type 填“结构”）：大纲写了具体代价、"

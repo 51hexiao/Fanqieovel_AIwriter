@@ -950,3 +950,31 @@ ok55 = ("def _write_section" in gsrc55
         and "加减闭合" in _m55[1]["content"]
         and "时间账" not in _m55n[1]["content"])
 print("55) 字数下限扩写重试+时间账注入:", ok55)
+
+# 56) 二创考据卡：12个公版IP内置事实卡，大纲/分节正文/审稿三处注入，无卡IP走考据纪律
+import ip_cards
+ok56 = len(ip_cards.IP_CARDS) >= 12
+_ip56, _c56 = ip_cards.find_card("男频衍生·名著·西游记 × 身份「边缘小人物」× 反差「自带现代知识」")
+ok56 &= (_ip56 == "西游记" and "紧箍" in _c56 and "五行山" in _c56)
+ok56 &= ip_cards.find_card("男频衍生·影视 × IP「热播剧反派阵营」")[0] == ""
+_t56 = {"title": "x", "hook": "y", "line": "二创", "mode": "gap",
+        "combo": "男频衍生·名著·西游记 × IP「西游记」"}
+_m56o = prompts.outline_messages(_t56)
+_m56o2 = prompts.outline_messages({**_t56, "combo": "男频衍生·影视 × IP「热播剧反派阵营」"})
+_m56s = prompts.section_messages(
+    {"title": "x", "line": "二创",
+     "topic": {"line": "二创", "combo": "男频衍生·名著·西游记 × IP「西游记」"},
+     "outline": {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+                 "characters": [], "clues": []}, "summaries": []}, 1, 5)
+_m56r = prompts.review_messages("x", "正文", line="二创",
+                                combo="女频衍生·民间传说·白蛇传 × IP「白蛇传」")
+_m56rn = prompts.review_messages("x", "正文", line="二创")
+ok56 &= ("原作考据卡·西游记" in _m56o[1]["content"]
+         and "一律以卡为准" in _m56o[1]["content"]
+         and "考据纪律" in _m56o2[1]["content"]
+         and "原作考据卡·西游记" in _m56s[1]["content"]
+         and "按卡写" in _m56s[1]["content"]
+         and "原作考据卡·白蛇传" in _m56r[1]["content"]
+         and "待人工核实" in _m56r[1]["content"]
+         and "原作考据卡·" not in _m56rn[1]["content"])
+print("56) 二创考据卡三处注入:", ok56)
