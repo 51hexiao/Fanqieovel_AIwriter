@@ -162,6 +162,21 @@ def start_story(topic, log=print, sec_words=0):
         log("标题生成失败，沿用选题标题：" + str(exc))
     sid = db.create_story(topic, outline, title=new_title, sec_words=sec_words)
     db.update_story(sid, variant=(f"{vr['key']}·{vr['name']}" if vr else ""))
+
+    def _write_section(story, i, total, hooks, msgs_extra=""):
+        msgs = prompts.section_messages(story, i, total, hooks=hooks,
+                                        market_rules=mkt_rules)
+        if msgs_extra:
+            msgs = [msgs[0], dict(msgs[1])]
+            msgs[1]["content"] += msgs_extra
+        raw = llm.chat(msgs, temperature=llm.cfg("temperature_write", 0.85),
+                       max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
+        m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
+        summary = m.group(1).strip() if m else ""
+        text = (raw[:m.start()] if m else raw).strip()
+        text = re.sub(r"^```[a-z]*\n?|```$", "", text).strip()
+        return text, summary
+
     total = len(outline.get("sections", [])) or 5
     for i in range(1, total + 1):
         log(f"撰写第 {i}/{total} 节…")
@@ -185,14 +200,24 @@ def start_story(topic, log=print, sec_words=0):
             hooks = _hs[:4] or None
             if hooks:
                 log("注入热门开篇样板 ×" + str(len(hooks)))
-        raw = llm.chat(prompts.section_messages(story, i, total, hooks=hooks,
-                                                market_rules=mkt_rules),
-                       temperature=llm.cfg("temperature_write", 0.85),
-                       max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
-        m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
-        summary = m.group(1).strip() if m else ""
-        text = (raw[:m.start()] if m else raw).strip()
-        text = re.sub(r"^```[a-z]*\n?|```$", "", text).strip()
+        text, summary = _write_section(story, i, total, hooks)
+        # 字数下限：模型欠发时自动扩写重试一次，只采纳更长的稿
+        floor = int((story.get("sec_words") or 1350) * 0.85)
+        if floor and db.cjk_len(text) < floor:
+            n0 = db.cjk_len(text)
+            log(f"第 {i} 节只有 {n0} 字（下限 {floor}），扩写重试…")
+            text2, summary2 = _write_section(
+                story, i, total, hooks,
+                msgs_extra=(f"\n\n【扩写重试（最高优先）】你上一稿本节只有 {n0} 字，"
+                            f"远低于本节要求。重写本节：把每个情节点当成完整场景写——"
+                            "冲突多走一轮，对话与细节给足，情绪多压一层再放；"
+                            "禁止重复句子、禁止回忆复述和总结性段落凑字。"
+                            f"成稿不得少于 {floor + 150} 字，这是编辑部的硬性要求，"
+                            "交稿前先自己估算字数，不够就继续写。"))
+            if db.cjk_len(text2) > db.cjk_len(text):
+                text, summary = text2, summary2
+            if db.cjk_len(text) < floor:
+                log(f"第 {i} 节扩写后 {db.cjk_len(text)} 字，仍欠（由质检把关）")
         db.append_section(sid, i, text, summary)
     db.update_story(sid, status="generated")
     s = db.get_story(sid)

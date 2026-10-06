@@ -324,7 +324,7 @@ def _fake28(messages, **kw):
                 ' {"text": "候选B", "why": "x"}, {"text": "候选C", "why": "y"}]}')
     if "围绕下面的选题" in u:
         return _json.dumps(_outline28, ensure_ascii=False)
-    return "正文第一段。\n摘要：我赢了"
+    return ("正文第一段。" * 240) + "\n摘要：我赢了"
 
 
 _orig_chat = llm.chat
@@ -422,6 +422,9 @@ ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
     and "src-rigor" in usrc and "'严谨': '悬疑逻辑'" in usrc
     and 'data-line="纯文"' not in usrc and "src-pure" not in usrc
     and m29_outf[0]["content"] == prompts.SYS_WRITER_FAN
+    and "timeline" in m29_outw[1]["content"]
+    and "timeline" in m29_outr[1]["content"]
+    and "timeline" in m29_outf[1]["content"]
     and "base_facts" in m29_outf[1]["content"]
     and "homage" in m29_outf[1]["content"]
     and "情怀落点" in m29_outf[1]["content"]
@@ -581,7 +584,7 @@ ok34 &= ("补空白模式" in u34g and "结局不变" in u34g
          and "蝴蝶效应模式" not in u34g
          and "蝴蝶效应模式" in u34b and "必须有因果" in u34b
          and "price_paid" in u34s and "永久失去了什么" in u34s
-         and "填 none" in u34s)
+         and "填 none" in u34s and "timeline" in u34s)
 sec34 = prompts.section_messages(
     {"title": "x", "line": "严谨", "topic": {"line": "严谨", "flavor": "烟火余味"},
      "outline": {"sections": [], "characters": [], "clues": []}}, 2, 5)
@@ -609,7 +612,7 @@ def _fake35(messages, **kw):
         return _json.dumps(_outline35, ensure_ascii=False)
     if "爆款标题样本" in u:
         return '{"titles": [{"text": "变体测试标题", "why": "x"}]}'
-    return "正文。\n摘要：测"
+    return ("他把门关上，数到十，才回头看了一眼。" * 80) + "\n摘要：测"
 llm.chat = _fake35
 _logs35 = []
 try:
@@ -925,3 +928,25 @@ ok54 = ("function autoRun" in usrc and "▶ 一键全自动" in usrc
         and "ed-auto" in usrc
         and "没有可执行的意见，跳过修稿" in usrc)
 print("54) 一键全自动:", ok54)
+
+# 55) 字数下限自动扩写重试 + 时间账注入每节正文（四线大纲 schema 均含 timeline）
+gsrc55 = io.open("generator.py", encoding="utf-8").read()
+_o55 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+        "characters": [], "clues": [],
+        "timeline": "主角26岁，事故发生在1989年4月，跨度二十六年"}
+_m55 = prompts.section_messages(
+    {"title": "x", "line": "温情", "topic": {"line": "温情"},
+     "outline": _o55, "summaries": []}, 1, 5)
+_o55n = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+         "characters": [], "clues": []}
+_m55n = prompts.section_messages(
+    {"title": "x", "line": "悬疑", "topic": {"line": "悬疑"},
+     "outline": _o55n, "summaries": []}, 1, 5)
+ok55 = ("def _write_section" in gsrc55
+        and "db.cjk_len(text) < floor" in gsrc55
+        and "扩写重试（最高优先）" in gsrc55
+        and "时间账（硬约束，逐条遵守）" in _m55[1]["content"]
+        and "1989年4月" in _m55[1]["content"]
+        and "加减闭合" in _m55[1]["content"]
+        and "时间账" not in _m55n[1]["content"])
+print("55) 字数下限扩写重试+时间账注入:", ok55)
