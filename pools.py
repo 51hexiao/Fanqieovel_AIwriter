@@ -297,8 +297,9 @@ def sample_rigor_combo(rng: random.Random):
 
 
 # ---- 二创改编线（内部键"二创"）：底座×IP×身份×反差×情怀 ----
-# 名著与民间传说为公版可放心指名；影视/动漫默认泛指，避免指名真实版权作品，
-# 选题提示词会要求模型遵守同一口径（或只用平台允许二创的IP）。
+# 名著与民间传说为公版可放心指名；动漫底座里宝可梦按平台衍生口径可指名，
+# 其余影视/动漫仍泛指，避免指名其他真实版权作品，
+# 选题提示词会要求模型遵守同一口径。
 FAN_BASES = ["名著", "民间传说", "影视", "动漫"]
 FAN_IPS = {
     "名著": ["西游记", "水浒传", "三国演义", "红楼梦", "聊斋志异", "封神演义"],
@@ -306,9 +307,11 @@ FAN_IPS = {
               "八仙过海", "灶王爷"],
     "影视": ["热播剧反派阵营", "老剧里的路人甲", "年代剧里的邻居",
             "武侠剧里的店小二"],
-    "动漫": ["热血动漫里的路人", "经典动漫里的邻居", "番剧里的反派手下",
+    "动漫": ["宝可梦", "热血动漫里的路人", "经典动漫里的邻居", "番剧里的反派手下",
             "国漫里的小妖"],
 }
+# 指名IP比泛指占位抽得更勤：宝可梦占两份权重
+FAN_IP_WEIGHTS = {"动漫": [2, 1, 1, 1, 1]}
 FAN_ROLES = ["边缘小人物", "反派手下", "炮灰路人", "无名配角",
              "被冤枉的配角", "提前穿书的现代人", "原作主角的邻居"]
 FAN_TWISTS = ["自带现代知识", "提前知道剧情", "手里多了一样原作没有的东西",
@@ -320,10 +323,13 @@ def sample_fan_combo(rng: random.Random):
     """二创改编线（内部键"二创"）：主分类取官方衍生标签，底座四类轮换。
     mode=gap 补原作空白（主线结局不变）；mode=butterfly 蝴蝶效应（支线偏移推主线）。"""
     base = rng.choice(FAN_BASES)
+    ips = FAN_IPS[base]
+    w = FAN_IP_WEIGHTS.get(base)
+    ip = rng.choices(ips, weights=w, k=1)[0] if w else rng.choice(ips)
     return {
         "main": rng.choice(["男频衍生", "女频衍生"]),
         "base": base,
-        "ip": rng.choice(FAN_IPS[base]),
+        "ip": ip,
         "role": rng.choice(FAN_ROLES),
         "twist": rng.choice(FAN_TWISTS),
         "emo": rng.choice(FAN_EMOS),

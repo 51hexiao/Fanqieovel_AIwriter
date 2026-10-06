@@ -978,3 +978,19 @@ ok56 &= ("原作考据卡·西游记" in _m56o[1]["content"]
          and "待人工核实" in _m56r[1]["content"]
          and "原作考据卡·" not in _m56rn[1]["content"])
 print("56) 二创考据卡三处注入:", ok56)
+
+# 57) 宝可梦二创：动漫底座指名位+抽取权重，考据卡注入三处，审稿平台风险开例外
+ok57 = ("宝可梦" in pools.FAN_IPS["动漫"]
+        and pools.FAN_IP_WEIGHTS.get("动漫", [])[0] == 2
+        and "宝可梦" in ip_cards.IP_CARDS)
+_ip57, _c57 = ip_cards.find_card("男频衍生·动漫·IP「宝可梦」")
+ok57 &= (_ip57 == "宝可梦" and "皮卡丘" in _c57 and "属性克制" in _c57
+         and "不用旧称" in _c57)
+_m57r = prompts.review_messages("x", "正文", line="二创",
+                                combo="男频衍生·动漫·IP「宝可梦」")
+ok57 &= ("原作考据卡·宝可梦" in _m57r[1]["content"]
+         and "如宝可梦" in _m57r[1]["content"])
+_rng57 = random.Random(7)
+_ips57 = {pools.sample_fan_combo(_rng57)["ip"] for _ in range(300)}
+ok57 &= "宝可梦" in _ips57
+print("57) 宝可梦二创:", ok57)
