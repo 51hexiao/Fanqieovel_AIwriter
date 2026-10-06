@@ -344,7 +344,7 @@ ok28 = (s28["title"] == "我儿子才三岁，你说他高考作弊？"
         and s28["status"] == "generated")
 print("28) 大纲→标题→写作 流水线:", ok28)
 
-# 29) 温情线合并人间烟火（吸收纯真笔触文笔）+ 严谨线展示名"悬疑逻辑"（强逻辑）
+# 29) 温情线合并人间烟火（吸收纯真笔触文笔）+ 严谨线展示名"悬疑烧脑"（强逻辑）
 #     + 二创线大纲写法独立（专属分支：base_facts 考据速记 + homage 情怀复现）
 _t29w = {"title": "外婆的顶针", "hook": "小事", "line": "温情"}
 _t29r = {"title": "死者手表慢了七分钟", "hook": "谜面", "line": "严谨"}
@@ -390,7 +390,7 @@ _m29_secf_body = {"title": "x", "line": "二创", "topic": {"line": "二创"},
 m29_secf = prompts.section_messages(_m29_secf_body, 1, 5)
 usrc = io.open("static/index.html", encoding="utf-8").read()
 ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
-    and pools.LINE_NAMES.get("严谨") == "悬疑逻辑"
+    and pools.LINE_NAMES.get("严谨") == "悬疑烧脑"
     and m29_topw[0]["content"] == prompts.SYS_TOPIC_WARM
     and "意象" in m29_topw[1]["content"] and "两段式" in m29_topw[1]["content"]
     and m29_topr[0]["content"] == prompts.SYS_TOPIC_RIGOR
@@ -419,7 +419,7 @@ ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
     and "两段式" in m29_tts[1]["content"]
     and "我儿子才三岁" in m29_tts[1]["content"]
     and 'data-line="温情"' in usrc and 'data-line="严谨"' in usrc
-    and "src-rigor" in usrc and "'严谨': '悬疑逻辑'" in usrc
+    and "src-rigor" in usrc and "'严谨': '悬疑烧脑'" in usrc
     and 'data-line="纯文"' not in usrc and "src-pure" not in usrc
     and m29_outf[0]["content"] == prompts.SYS_WRITER_FAN
     and "timeline" in m29_outw[1]["content"]
@@ -433,7 +433,7 @@ ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
     and m29_secf[0]["content"] == prompts.SYS_WRITER_FAN
     and "原作设定速记" in m29_secf[1]["content"]
     and "情怀元素复现计划" in m29_secf[1]["content"])
-print("29) 温情=人间烟火+严谨=悬疑逻辑+二创大纲独立:", ok29)
+print("29) 温情=人间烟火+严谨=悬疑烧脑+二创大纲独立:", ok29)
 
 # 30) 标题统一两段式：三条线标题要求均含两段式，样本库全两段
 banks30 = (prompts.TITLE_BANK_SUS + prompts.TITLE_BANK_WARM
