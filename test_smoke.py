@@ -344,9 +344,14 @@ ok28 = (s28["title"] == "我儿子才三岁，你说他高考作弊？"
         and s28["status"] == "generated")
 print("28) 大纲→标题→写作 流水线:", ok28)
 
-# 29) 温情线合并人间烟火（吸收纯真笔触文笔）+ 严谨线细腻写实（强逻辑悬疑/无限流）
+# 29) 温情线合并人间烟火（吸收纯真笔触文笔）+ 严谨线展示名"悬疑逻辑"（强逻辑）
+#     + 二创线大纲写法独立（专属分支：base_facts 考据速记 + homage 情怀复现）
 _t29w = {"title": "外婆的顶针", "hook": "小事", "line": "温情"}
 _t29r = {"title": "死者手表慢了七分钟", "hook": "谜面", "line": "严谨"}
+_t29f = {"title": "穿成巡山小妖，我给大王递了辞职信", "hook": "反差",
+         "line": "二创", "mode": "gap", "combo": "衍生·西游底座"}
+_t29fb = {"title": "穿成烂剧女配", "hook": "反差", "line": "二创",
+          "mode": "butterfly", "combo": "衍生·热播剧底座"}
 _o29 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
         "characters": [], "clues": [], "narrator": "我"}
 _or29 = {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
@@ -373,9 +378,19 @@ m29_tt = prompts.title_messages(_t29w, _o29, line="温情")
 m29_ttw = prompts.title_messages(_t29r, _o29, line="严谨")
 m29_tts = prompts.title_messages(
     {"title": "x", "hook": "y", "line": "悬疑"}, _o29, line="悬疑")
+m29_outf = prompts.outline_messages(_t29f)
+m29_outfb = prompts.outline_messages(_t29fb)
+_m29_secf_body = {"title": "x", "line": "二创", "topic": {"line": "二创"},
+                  "outline": {"sections": [{"no": 1, "beats": ["a"], "hook": "h"}],
+                              "characters": [], "clues": [], "narrator": "我",
+                              "base_facts": "巡山小妖一轮换岗两人，子时交接",
+                              "homage": {"items": [{"element": " 小钻风的名号",
+                                                    "plan": "第1节亮出、第4节当众喊出"}]}},
+                  "summaries": []}
+m29_secf = prompts.section_messages(_m29_secf_body, 1, 5)
 usrc = io.open("static/index.html", encoding="utf-8").read()
 ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
-    and pools.LINE_NAMES.get("严谨") == "细腻写实"
+    and pools.LINE_NAMES.get("严谨") == "悬疑逻辑"
     and m29_topw[0]["content"] == prompts.SYS_TOPIC_WARM
     and "意象" in m29_topw[1]["content"] and "两段式" in m29_topw[1]["content"]
     and m29_topr[0]["content"] == prompts.SYS_TOPIC_RIGOR
@@ -404,9 +419,18 @@ ok29 = (pools.LINE_NAMES.get("温情") == "人间烟火"
     and "两段式" in m29_tts[1]["content"]
     and "我儿子才三岁" in m29_tts[1]["content"]
     and 'data-line="温情"' in usrc and 'data-line="严谨"' in usrc
-    and "src-rigor" in usrc and "'严谨': '细腻写实'" in usrc
-    and 'data-line="纯文"' not in usrc and "src-pure" not in usrc)
-print("29) 温情=人间烟火+严谨=细腻写实:", ok29)
+    and "src-rigor" in usrc and "'严谨': '悬疑逻辑'" in usrc
+    and 'data-line="纯文"' not in usrc and "src-pure" not in usrc
+    and m29_outf[0]["content"] == prompts.SYS_WRITER_FAN
+    and "base_facts" in m29_outf[1]["content"]
+    and "homage" in m29_outf[1]["content"]
+    and "情怀落点" in m29_outf[1]["content"]
+    and "补空白模式" in m29_outf[1]["content"]
+    and "蝴蝶效应模式" in m29_outfb[1]["content"]
+    and m29_secf[0]["content"] == prompts.SYS_WRITER_FAN
+    and "原作设定速记" in m29_secf[1]["content"]
+    and "情怀元素复现计划" in m29_secf[1]["content"])
+print("29) 温情=人间烟火+严谨=悬疑逻辑+二创大纲独立:", ok29)
 
 # 30) 标题统一两段式：三条线标题要求均含两段式，样本库全两段
 banks30 = (prompts.TITLE_BANK_SUS + prompts.TITLE_BANK_WARM
@@ -435,7 +459,9 @@ m31_tt = prompts.title_messages(_t31, _o29, line="二创")
 ok31 &= (m31_top[0]["content"] == prompts.SYS_TOPIC_FAN
     and "底座" in m31_top[1]["content"] and "两段式" in m31_top[1]["content"]
     and m31_out[0]["content"] == prompts.SYS_WRITER_FAN
-    and "二创要求" in m31_out[1]["content"]
+    and "底座与模式" in m31_out[1]["content"]
+    and "base_facts" in m31_out[1]["content"]
+    and "情怀落点" in m31_out[1]["content"]
     and m31_sec[0]["content"] == prompts.SYS_WRITER_FAN
     and "二创铁律" in m31_sec[1]["content"]
     and m31_rev[0]["content"] == prompts.SYS_REVIEW_FAN

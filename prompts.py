@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
-"""提示词模板：四条风格线共用底盘（通用叙事规范+反模板+平台安全），
-各线只保留自己的 intro / 法则 / 本线文风 / 本线安全，组装成单条 system 消息。
+"""提示词模板：四条风格线各自独立成套（无脑爽文/人间烟火/悬疑逻辑/二创改编），
+每条线有自己的 intro / 法则 / 本线文风 / 本线安全 / 选题口径 / 大纲写法 / 审稿标准，
+组装成单条 system 消息。
 规则分两层：硬规则（违反即事故）=数字时间一致、能力/规则边界、伏笔先于使用、
 原作考据、平台安全；其余（段落长度、爽点配额、金句数量）一律软约束。
-悬疑线用【上头法则】，温情线用【情绪法则+白描】（原纯真笔触线已并入），
-严谨线用【严谨法则】（强逻辑悬疑/无限流，展示名"细腻写实"），二创线用【二创铁律+上头法则】。"""
+无脑爽文线用【爽感法则】，人间烟火线用【情绪法则+白描】（原纯真笔触线已并入），
+悬疑逻辑线用【严谨法则】（强逻辑：本格推理/无限流/规则怪谈），二创线用【二创铁律+上头法则】。"""
 
 # ---------- 四线共用底盘 ----------
 _COMMON_NORM = """【通用叙事规范】
@@ -98,7 +99,7 @@ SYS_REVIEW = ("你是番茄短故事的资深审稿编辑，用\"读者会不会
 SYS_REVIEW_WARM = ("你是番茄短故事的资深审稿编辑，用\"读者会不会心里一酸\"的"
                    "真挚标准+硬伤检查双线审稿。你只输出JSON。")
 
-# ---------- 严谨线（细腻写实·强逻辑） ----------
+# ---------- 悬疑逻辑线（强逻辑：本格推理/无限流/规则怪谈） ----------
 _RIGOR_INTRO = ("你是番茄小说\"短故事\"赛道的职业作者，写第一人称强逻辑短篇——本格推理、"
                 "无限流（主神空间）、规则怪谈都归这条线。这条线以逻辑立身：设定像真的、规则算得清、"
                 "细节拉满，读者能拿着你给的信息回头验算每一步推理；同时守住手机阅读习惯：段落短、"
@@ -127,7 +128,7 @@ _RIGOR_MODULE = """【严谨法则（本线硬规则，违反即硬伤）】
 
 SYS_WRITER_RIGOR = _compose(_RIGOR_INTRO, _RIGOR_MODULE, _COMMON_NORM, _COMMON_SAFETY)
 
-SYS_TOPIC_RIGOR = ("你是短故事选题策划，负责\"细腻写实\"线（强逻辑短篇）：从本格推理、"
+SYS_TOPIC_RIGOR = ("你是短故事选题策划，负责\"悬疑逻辑\"线（强逻辑短篇）：从本格推理、"
                    "无限流（主神空间）、规则怪谈里找\"规则清晰、谜面反常、破局在规则内\""
                    "的选题——一个反常的案件/副本/机制，主角靠严密推理或规则内操作破局。"
                    "好选题必须规则可验证、伏笔可回收、利害压得人喘不过气。你只输出JSON；所有字符串内部需要引用时一律用中文引号‘’「」《》，严禁出现未转义的英文双引号。")
@@ -446,7 +447,7 @@ SYS_TITLE = ("你是番茄短故事的爆款标题策划。读者在信息流里
 
 def title_messages(topic, outline, line="悬疑"):
     if line == "严谨":
-        style_name = "细腻写实（强逻辑悬疑/无限流）"
+        style_name = "悬疑逻辑（本格推理/无限流/规则怪谈）"
     elif line == "温情":
         style_name = "人间烟火（温情催泪）"
     elif line == "二创":
@@ -621,6 +622,49 @@ def outline_messages(topic, bench_openings=None, market_rules=None):
 - 无限流/规则怪谈：rules 字段定死规则全文与代价，破局必须发生在规则之内；主角的能力边界第一节就定死，全文不许冒出新本事。
 - hook 写成断章：在真相即将说破、规则即将被钻空、或危险即将落下的瞬间停笔。"""
         sysmsg = SYS_WRITER_RIGOR
+    elif line == "二创":
+        import pools
+        mode_name = pools.FAN_MODES.get(topic.get("mode"), "补原作空白")
+        user = f"""围绕下面的选题，写一份可直接执行的二创改编写作大纲。
+
+选题：{topic.get('title', '')}
+卖点：{topic.get('hook', '')}
+情怀点：{topic.get('social', '')}
+差异点：{topic.get('diff', '')}
+底座与模式：{topic.get('combo', '')}（本篇模式：{mode_name}）
+{bench_block}{rules_block}
+输出JSON（不要多余文字）：
+{{
+ "base_facts": "本故事会用到的原作设定速记：世界观/能力体系/关键人物关系逐条列出，必须经得起原作考据；拿不准的设定不列、正文也不用",
+ "characters": [{{"name":"姓名","role":"身份（原作边缘人物/无名配角/穿越者）","secret":"他自己的心思或隐瞒的事"}}],
+ "narrator": "第一人称叙述者穿成了谁/成了什么，处在原作剧情的哪个位置",
+ "homage": {{"items":[{{"element":"人人皆知的原作元素（一件法器/一个地点/一句名台词/一个名场面）","plan":"出现在第几节、如何从背景板一步步变成关键牌"}}]}},
+ "sections": [
+   {{"no":1,"beats":["情节点1","情节点2","情节点3"],"hook":"本节结尾钩子"}}
+ ],
+ "clues": [{{"what":"新故事自己的伏笔（不借原作剧情）","planted":"第几节埋下","payoff":"第几节揭晓"}}],
+ "price_paid": "主角为这次胜利永久失去了什么（写具体的人、物、关系或机会）；允许填 none，但必须附一句为什么本篇不需要，格式如'none：因为……'",
+ "final_line": "全文最后一段要点题的方向",
+ "title_echo": "结尾如何呼应标题"
+}}
+其中 sections 必须正好 5 节。
+
+要求：
+- 五节结构：一 穿越落点/觉醒瞬间直接砸出反常处境，主角用到的原作元素亮相，禁止从原作背景科普写起；二 小人物卷进原作大事件，第一次借原作元素扳回一城；三 原作剧情或对手加码，安排"以为主角要输"的假方向；四 底牌揭开——原作元素加主角自己的积累，当众清算；五 反派付出代价、情怀落点与点题。
+- homage 选2至3个人人皆知的原作元素，按 plan 复现，每次出现含义加深，最后一次收走全文情绪；生僻设定不借。
+- 原作设定只能在剧情里自然带出；base_facts 里列出的设定，正文引用时不得与原作冲突。
+- 主角是原作的边缘人物、无名配角或穿越者，不夺原作主角核心高光；原作主角只作背景板或引路人。
+- 主角全程不内耗：不哭闹、不吵架、不自证，回应永远比对手冷静一层；憋屈情绪写给读者，靠对手的嚣张和旁观者的态度传递。
+- price_paid 与底牌规则照爽文铁律执行：代价在正文真实发生（beats 写明第几节失去），主角能力边界第一节定死，不凭空加新本事。
+- hook 写成断章：在打脸即将发生、或原作名场面即将被主角搅动的瞬间停笔。"""
+        if topic.get("mode") == "butterfly":
+            user += ("\n- 蝴蝶效应模式：允许支线偏移，甚至推动主线合理偏移，但每个偏移都必须有"
+                     "因果——谁做了什么、为什么导致偏移，在 beats 里写明因果链；名场面结局若因"
+                     "偏移而改变，改变必须渐近、可追溯，原作人物性格、能力体系、世界规则不崩。")
+        else:
+            user += ("\n- 补空白模式：故事发生在原作没写的那段空白里，原作大事照常发生，"
+                     "主线名场面结局不变、只借势不改写。")
+        sysmsg = SYS_WRITER_FAN
     else:
         user = f"""围绕下面的选题，写一份可直接执行的写作大纲。
 
@@ -663,26 +707,6 @@ def outline_messages(topic, bench_openings=None, market_rules=None):
                  "- 反派与机制不降智：对手行动在其信息范围内合理，副本死亡必须有机制原因；\n"
                  "- 关键时间、数字写具体（几点几分、第几条规则、第几排），全文前后一致；\n"
                  "- 分节断章依旧执行：在真相即将说破、规则即将被钻空的瞬间停笔。")
-    elif line == "二创":
-        import pools
-        sysmsg = SYS_WRITER_FAN
-        user += ("\n【二创要求（本线最高优先级）】\n"
-                 "- 全文严格遵守原作世界观与人物关系，引用的每个原作元素都要符合原作设定；\n"
-                 "- 主角是原作的边缘人物、无名配角或穿越者，不夺原作主角高光；\n"
-                 "- 选2至3个人人皆知的情怀元素贯穿（一件法器、一个地点、一句台词），按大纲安排复现并加深；\n"
-                 "- 原作设定在剧情里自然带出，禁止说明书式科普；\n")
-        if topic.get("mode") == "butterfly":
-            user += ("- 蝴蝶效应模式：原作人物性格、能力体系、世界规则不崩；允许支线偏移，"
-                     "甚至推动主线合理偏移，但每个偏移必须有因果——谁做了什么、为什么导致"
-                     "偏移，在 beats 里写明因果链；\n"
-                     "- 名场面结局若因偏移而改变，改变必须是渐近的、可追溯的，禁止一步跳到"
-                     "完全陌生的走向；\n"
-                     "- 五节结构照旧执行：围观—反击—假方向—底牌清算—代价与情怀落点。")
-        else:
-            user += ("- 补空白模式：原作大事记照常发生，主线名场面结局不变；你的故事发生在"
-                     "原作没写的叙事空白处，用原创人物或边缘视角填补那一段空白；\n"
-                     "- 名场面只借势不改写结局；\n"
-                     "- 五节结构照旧执行：围观—反击—假方向—底牌清算—代价与情怀落点。")
     import pools
     flv = topic.get("flavor")
     if flv and flv in pools.FLAVOR_PACKS:
@@ -695,6 +719,7 @@ def section_messages(story, no, total, hooks=None, market_rules=None):
     line = story.get("line") or (story.get("topic") or {}).get("line", "悬疑")
     warm = line == "温情"
     rigor = line == "严谨"
+    fan = line == "二创"
     o = story.get("outline") or {}
     sec = None
     for s in o.get("sections", []):
@@ -735,6 +760,20 @@ def section_messages(story, no, total, hooks=None, market_rules=None):
             extra += (f"\n【规则全文（最高约束，逐条遵守）】{rules}"
                       f"\n破局必须发生在以上规则之内，不得违反、不得凭空新增；"
                       f"本节用到的每条规则都要与规则原文一致。")
+    if fan:
+        bf = str(o.get("base_facts") or "").strip()
+        if bf:
+            extra += (f"\n【原作设定速记（最高约束，逐条遵守）】{bf}"
+                      "\n本节引用到的原作元素必须与速记及原作设定一致，拿不准的设定不写。")
+        hom = o.get("homage") or {}
+        items = hom.get("items") if isinstance(hom, dict) else None
+        rows = []
+        for it in items or []:
+            if isinstance(it, dict) and it.get("element"):
+                rows.append(f"- {it['element']}（{it.get('plan', '')}）")
+        if rows:
+            extra += ("\n【情怀元素复现计划】\n" + "\n".join(rows)
+                      + "\n本节若安排某元素出现，按计划写出画面，含义要比上次更深一层。")
     import pools
     flv = (story.get("topic") or {}).get("flavor")
     if flv and flv in pools.FLAVOR_PACKS:
@@ -776,7 +815,7 @@ def section_messages(story, no, total, hooks=None, market_rules=None):
 【本节结尾钩子】{sec.get('hook', '')}
 
 {closing}"""
-    sysc = (SYS_WRITER_FAN if line == "二创"
+    sysc = (SYS_WRITER_FAN if fan
             else SYS_WRITER_RIGOR if rigor
             else SYS_WRITER_WARM if warm else SYS_WRITER)
     vr_name = str(story.get("variant") or "")

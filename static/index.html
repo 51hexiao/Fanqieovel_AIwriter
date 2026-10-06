@@ -312,7 +312,7 @@ details.t-more .t-meta{margin-bottom:0}
       <span class="gen-label">风格</span>
       <button class="lbtn active" data-line="悬疑" onclick="setLine(this)" title="前半憋屈给读者，主角清醒或无欲无求不内耗，后半反击爽，最终胜利属于主角">🗡 无脑爽文</button>
       <button class="lbtn" data-line="温情" onclick="setLine(this)" title="人间烟火：现实温情+白描文笔，真挚情感，允许极轻梦幻点缀">🏮 人间烟火</button>
-      <button class="lbtn" data-line="严谨" onclick="setLine(this)" title="细腻写实：逻辑严谨、细节拉满——本格悬疑、主神空间/无限流，规则清晰、伏笔回收">🔍 细腻写实</button>
+      <button class="lbtn" data-line="严谨" onclick="setLine(this)" title="悬疑逻辑：强逻辑推理——本格悬疑、无限流/规则怪谈，规则清晰、伏笔必回收，破局可验算">🔍 悬疑逻辑</button>
       <button class="lbtn" data-line="二创" onclick="setLine(this)" title="借大众熟知的IP讲新故事：名著/民间传说/影视/动漫四类底座，情怀+反差，考据不出错">🎭 二创改编</button>
       <span style="flex:1"></span>
       <button class="primary" onclick="genTopics()">🎲 随机生成 6 个</button>
@@ -339,7 +339,7 @@ details.t-more .t-meta{margin-bottom:0}
       <option value="">全部风格</option>
       <option value="悬疑">无脑爽文</option>
       <option value="温情">人间烟火</option>
-      <option value="严谨">细腻写实</option>
+      <option value="严谨">悬疑逻辑</option>
       <option value="二创">二创改编</option>
     </select>
   </div>
@@ -354,7 +354,7 @@ details.t-more .t-meta{margin-bottom:0}
           <select id="mt-line">
             <option value="悬疑">无脑爽文</option>
             <option value="温情">人间烟火</option>
-            <option value="严谨">细腻写实</option>
+            <option value="严谨">悬疑逻辑</option>
             <option value="二创">二创改编</option>
           </select></div>
         <div class="field"><label>议题（社会话题 / 情绪共鸣点，选填）</label>
@@ -447,7 +447,7 @@ details.t-more .t-meta{margin-bottom:0}
     <select id="bench-line" style="max-width:120px" onchange="loadBench()">
       <option value="悬疑">无脑爽文</option>
       <option value="温情">人间烟火</option>
-      <option value="严谨">细腻写实</option>
+      <option value="严谨">悬疑逻辑</option>
       <option value="二创">二创改编</option>
     </select>
     <button class="primary" onclick="addBench()">拆解入库</button>
@@ -586,7 +586,7 @@ async function poll(tid, onStage) {
 }
 
 /* ---------- 选题库 ---------- */
-const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '人间烟火', '严谨': '细腻写实', '二创': '二创改编'};
+const LINE_NAMES = {'悬疑': '无脑爽文', '温情': '人间烟火', '严谨': '悬疑逻辑', '二创': '二创改编'};
 let topicFilter = '';
 let topicLineFilter = '';
 const topicSel = new Set();
