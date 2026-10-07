@@ -80,6 +80,18 @@ CREATE TABLE IF NOT EXISTS market_rules(
 CREATE TABLE IF NOT EXISTS bench_reports(
   line TEXT PRIMARY KEY, data_json TEXT DEFAULT '', created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS works_stats(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  story_id INTEGER DEFAULT 0,
+  title TEXT DEFAULT '',
+  shows INTEGER DEFAULT 0,
+  reads INTEGER DEFAULT 0,
+  recommends INTEGER DEFAULT 0,
+  collects INTEGER DEFAULT 0,
+  status_text TEXT DEFAULT '',
+  raw TEXT DEFAULT '',
+  scraped_at TEXT
+);
 """)
         cols = {r[1] for r in c.execute("PRAGMA table_info(stories)")}
         if "line" not in cols:  # 旧库迁移
@@ -402,6 +414,41 @@ def recent_topics(n=30):
             "SELECT data_json FROM topics WHERE status='used'"
             " ORDER BY id DESC LIMIT ?", (n,)).fetchall()
         return [json.loads(r["data_json"]) for r in rows]
+
+
+def story_topic_map():
+    """{story_id: 完整选题 dict}——批量断稿匹配/自家战绩归线用，轻量读取。"""
+    with _conn() as c:
+        rows = c.execute("SELECT id, topic_json FROM stories").fetchall()
+    out = {}
+    for r in rows:
+        try:
+            out[r["id"]] = json.loads(r["topic_json"] or "{}")
+        except Exception:
+            out[r["id"]] = {}
+    return out
+
+
+# ---------- 自家作品数据（发布后回流，只读抓取） ----------
+def save_work_stats(rows):
+    """每次抓取整体替换为最新快照。rows: [{story_id,title,shows,reads,...,raw}]"""
+    ts = now()
+    with _lock, _conn() as c:
+        c.execute("DELETE FROM works_stats")
+        for r in rows or []:
+            c.execute(
+                "INSERT INTO works_stats(story_id,title,shows,reads,recommends,"
+                "collects,status_text,raw,scraped_at) VALUES(?,?,?,?,?,?,?,?,?)",
+                (int(r.get("story_id") or 0), r.get("title") or "",
+                 int(r.get("shows") or 0), int(r.get("reads") or 0),
+                 int(r.get("recommends") or 0), int(r.get("collects") or 0),
+                 r.get("status_text") or "", r.get("raw") or "", ts))
+
+
+def latest_work_stats():
+    with _conn() as c:
+        c.row_factory = sqlite3.Row
+        return [dict(r) for r in c.execute("SELECT * FROM works_stats ORDER BY id")]
 
 
 # ---------- 爆款拆解库 ----------

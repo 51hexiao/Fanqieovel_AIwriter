@@ -22,3 +22,4 @@ desktop.ini
 ----
 db_rescue/
 browser_cdp.json
+*.db.testjunk.bak

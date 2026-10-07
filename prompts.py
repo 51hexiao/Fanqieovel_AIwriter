@@ -247,7 +247,8 @@ def story_rule_messages(items):
 
 
 def topic_messages(combos, recent, line="悬疑", bench_titles=None,
-                   hot_words=None, picks=None, hot_stories=None):
+                   hot_words=None, picks=None, hot_stories=None,
+                   own_stats=None):
     import pools
     roles = "、".join(pools.CAT["角色"])
     if line == "温情":
@@ -372,6 +373,19 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
                          "学的是各条标注的钩子/特色/仿写手法，标题只学句式，"
                          "题材·标签组合可直接借用或反其道避开拥挤赛道，"
                          "禁止抄情节、句词、人名）】\n" + "\n".join(rows) + "\n")
+    own_block = ""
+    if own_stats:
+        rows = []
+        for w in own_stats[:6]:
+            ln = pools.LINE_NAMES.get(w.get("line") or "", w.get("line") or "")
+            one = f"- {ln}《{w.get('title', '')}》阅读 {w.get('reads', 0)}"
+            if w.get("combo"):
+                one += f"｜组合：{w['combo']}"
+            rows.append(one)
+        own_block = ("\n【自家战绩（已发布作品的真实数据，按阅读排序；"
+                     "出过数据的组合方向优先复用变体，数据差的组合方向本次少用；"
+                     "只学自己验证过的方向，内容仍须全新）】\n"
+                     + "\n".join(rows) + "\n")
     user = f"""请为下面 {len(combos)} 个组合各设计 1 个短故事选题。
 
 【本次组合】
@@ -379,7 +393,7 @@ def topic_messages(combos, recent, line="悬疑", bench_titles=None,
 
 【组合说明】主分类/情节/情绪/背景取自番茄发布页官方分类（经过平台审核、决定流量分发），选题必须落在这些标签的读者预期里；官方角色标签（人物设定可择一自然融入，不要生硬贴标签）：{roles}；人设=主角姿态，记住爽文铁律：憋屈让读者受，主角保持清醒或无欲无求，最终胜利属于主角；底牌=逆袭引擎。这些写法约束用于保证选题不撞车。
 
-{bench_block}{hot_block}{picks_block}{stories_block}
+{bench_block}{hot_block}{picks_block}{stories_block}{own_block}
 {_recent_block(recent)}
 
 每个选题输出一个JSON对象：{schema}
@@ -945,6 +959,25 @@ SYS_REVISE = ("你是改稿执行者。给你成品稿的一部分、作者意�
               "不得新增人物、不得更改结局走向；分节标记若出现在原文中必须保留；\n"
               "5. 保持原稿字数规模（正负10%）与本赛道文风。\n"
               "只输出重写后的文字，不要任何解释。")
+
+SYS_EXPAND = ("你是扩写执行者。给你短故事中的某一节正文，唯一任务是把这一节扩写到目标字数："
+              "把每个情节点当成完整场景写——冲突多走一轮、对话与细节给足、情绪多压一层再放；"
+              "禁止重复句子、禁止回忆复述和总结性段落凑字。铁律：情节主干、人名、人物关系、"
+              "伏笔位置、结尾断章钩子一律不变，不得新增人物、不得更改走向；保持原文文风。"
+              "只输出扩写后的正文，不要节名、不要解释。")
+
+
+def expand_section_messages(story, no, text, target):
+    extra = ""
+    o = story.get("outline") or {}
+    tl = str(o.get("timeline") or "").strip()
+    if tl and tl != "无":
+        extra = (f"\n【时间账】{tl}\n扩写新增的数字必须与时间账一致，算不通的"
+                 "数字不给具体值。")
+    user = (f"书名《{story['title']}》。下面是第 {no} 节正文，"
+            f"请扩写到至少 {target} 个汉字。\n\n【原文】\n{text}")
+    return [{"role": "system", "content": SYS_EXPAND},
+            {"role": "user", "content": user + extra}]
 
 
 def _fmt_review_issues(issues):

@@ -326,7 +326,7 @@ details.t-more .t-meta{margin-bottom:0}
     <span style="flex:1"></span>
     <span class="hint">已选 <b id="sel-n" style="color:var(--acc)">0</b></span>
     <button id="btn-selall" onclick="selectAllTopics()" title="勾选当前列表里的全部选题">全选</button>
-    <button onclick="batchWrite()" title="按勾选顺序，一篇写完再写下一篇">✍ 批量写稿</button>
+    <button onclick="batchWrite()" title="按勾选顺序，逐篇执行 写稿→扩写→审稿→修稿→入库；单篇失败自动重试一次，再败跳过">▶ 批量全自动</button>
     <button onclick="batchDelete()">🗑 批量删除</button>
   </div>
   <div class="bar" style="align-items:center">
@@ -388,6 +388,8 @@ details.t-more .t-meta{margin-bottom:0}
           <option value="二创">二创</option>
         </select>
         <button class="mini" id="st-empty-cleanup" hidden onclick="cleanupEmpty()">清空稿</button>
+        <button class="mini" onclick="scrapeWorks()" title="只读抓取已发布作品的真实数据（阅读/推荐等），自动反哺选题；发布助手浏览器已登录时免登录">📊 抓数据</button>
+        <span class="status" id="works-status"></span>
       </div>
       <div id="stories-list"></div>
     </div>
@@ -402,7 +404,8 @@ details.t-more .t-meta{margin-bottom:0}
           <span style="flex:1"></span>
           <button class="ed-sub" onclick="saveStory()">保存修改</button>
           <button class="ed-sub" onclick="doExport()">导出TXT</button>
-          <button class="ed-auto" onclick="autoRun()" title="自动顺序执行：质检 → 审稿 → 修稿 → 入库，全程无需确认；发布仍由你手动点。任一步失败会停下并保留已完成步骤，可单独重试">▶ 一键全自动</button>
+          <button class="ed-sub" onclick="doExpand(false)" title="把低于单节下限的节逐节扩写（只采纳更长的稿）；一键全自动也会在全文不足5500字时自动跑一轮">⤢ 扩写</button>
+          <button class="ed-auto" onclick="autoRun()" title="自动顺序执行：质检 →（字数不足先扩写）→ 审稿 → 修稿 → 入库，全程无需确认；发布仍由你手动点。任一步失败会停下并保留已完成步骤，可单独重试">▶ 一键全自动</button>
           <button class="ed-danger" onclick="rejectStory()" title="作废这篇稿件，可在「已废弃」栏彻底删除">废弃</button>
         </div>
         <div class="field"><label>标题（≤30字）</label><input type="text" id="ed-title"></div>
@@ -489,6 +492,14 @@ details.t-more .t-meta{margin-bottom:0}
       <div class="field"><label>番茄作者后台</label><input type="text" id="cfg-writer"></div>
       <div class="field"><label>写作温度</label><input type="text" id="cfg-temp"></div>
     </div>
+    <details style="margin-bottom:13px">
+      <summary>备用模型（主模型连续失败时自动切换，可不填）</summary>
+      <div style="margin-top:10px">
+        <div class="field"><label>备用 API 地址（留空沿用主地址）</label><input type="text" id="cfg-fb-base" placeholder="https://.../v1"></div>
+        <div class="field"><label>备用 API KEY（只保存在本机 config.json）</label><input type="password" id="cfg-fb-key" placeholder="只保存在本机 config.json，不上传"></div>
+        <div class="field"><label>备用模型名</label><input type="text" id="cfg-fb-model" list="model-list" placeholder="如 glm-4.5-air"></div>
+      </div>
+    </details>
     <details style="margin-bottom:13px">
       <summary>兼容选项（接口报参数错误时再动）</summary>
       <div style="margin-top:10px">
@@ -613,20 +624,19 @@ async function batchWrite() {
   if (!topicSel.size) { alert('先勾选要写的选题（卡片左上角方框）'); return; }
   const ids = [...topicSel];
   const st = $('#topics-status');
-  for (let i = 0; i < ids.length; i++) {
-    busy(st, `批量写稿 ${i + 1}/${ids.length}：选题 #${ids[i]} 生成中…`);
-    try {
-      const {task_id} = await api('/api/topics/' + ids[i] + '/write', {method: 'POST', body: JSON.stringify({})});
-      await poll(task_id, s => busy(st, `批量写稿 ${i + 1}/${ids.length}：${s}`));
-    } catch (e) {
-      idle(st, '✗ 选题 #' + ids[i] + ' 写稿失败：' + e.message, 'err');
-      loadTopics();
-      return;
-    }
+  busy(st, `批量全自动 ${ids.length} 篇：写稿→扩写→审稿→修稿→入库，排队执行中…`);
+  try {
+    const {task_id} = await api('/api/topics/batch-write', {method: 'POST', body: JSON.stringify({tids: ids})});
+    await poll(task_id, s => busy(st, s));
+  } catch (e) {
+    idle(st, '✗ 批量失败：' + e.message, 'err');
+    loadTopics();
+    return;
   }
-  idle(st, `✓ 批量写稿完成，共 ${ids.length} 篇，已放入稿件库`, 'ok');
+  idle(st, `✓ 批量全自动结束（共 ${ids.length} 篇），已入库的见稿件库`, 'ok');
   topicSel.clear();
   loadTopics();
+  loadStories();
 }
 async function batchDelete() {
   if (!topicSel.size) return;
@@ -884,12 +894,13 @@ function renderStoryList() {
       <div class="s-t">${esc(s.title) || '(未命名)'}</div>
       <div class="s-m"><span class="badge ${st[1]}">${st[0]}</span>${lineBadge}
         <span class="s-acts">
+          ${s.status === 'generating' ? `<button class="mini" title="写作中断的稿：从断掉的节继续写" onclick="event.stopPropagation();resumeStory(${s.id})">续写</button>` : ''}
           ${s.status === 'approved' ? `<button class="mini" title="打开发布助手" onclick="event.stopPropagation();quickPublish(${s.id})">发布</button>` : ''}
           ${s.word_count ? `<button class="mini" title="导出TXT" onclick="event.stopPropagation();window.open('/api/stories/${s.id}/export')">导出</button>` : ''}
           <button class="mini" title="删除这篇" onclick="event.stopPropagation();delStory(${s.id})">删</button>
         </span>
       </div>
-      <div class="s-d">${s.word_count} 字 · ${esc((s.updated_at || '').slice(5, 16))}</div>
+      <div class="s-d">${s.word_count} 字${WORKS[s.id] ? ' · 阅读 ' + fmtN(WORKS[s.id]) : ''} · ${esc((s.updated_at || '').slice(5, 16))}</div>
     </div>`;
   }).join('') : '<p class="hint" style="padding:12px 4px">这个筛选下没有稿件</p>';
 }
@@ -898,6 +909,43 @@ async function loadStories() {
   $('#sb-stories').textContent = '稿件 ' + allStories.length;
   renderStoryChips();
   renderStoryList();
+  loadWorks();
+}
+/* 自家作品数据（抓取回流）：story_id → 阅读数，列表徽标用 */
+let WORKS = {};
+function fmtN(n) {
+  n = +n || 0;
+  return n >= 10000 ? (n / 10000).toFixed(1) + '万' : String(n);
+}
+async function loadWorks() {
+  try {
+    const ws = await api('/api/works');
+    WORKS = {};
+    (ws || []).forEach(w => { if (w.story_id && w.reads) WORKS[w.story_id] = w.reads; });
+  } catch (e) { WORKS = {}; }
+  renderStoryList();
+}
+async function scrapeWorks() {
+  const st = $('#works-status');
+  busy(st, '抓取中…');
+  try {
+    const {task_id} = await api('/api/works/scrape', {method: 'POST'});
+    await poll(task_id, s => busy(st, s));
+    idle(st, '✓ 已更新', 'ok');
+  } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
+  loadWorks();
+}
+async function resumeStory(id) {
+  await openStory(id);
+  const st = $('#ed-status');
+  busy(st, '断点续写中…');
+  try {
+    const {task_id} = await api(`/api/stories/${id}/resume`, {method: 'POST'});
+    await poll(task_id, s => busy(st, s));
+    await openStory(id);
+    idle(st, '✓ 续写完成，已补齐缺失的节', 'ok');
+    loadStories();
+  } catch (e) { idle(st, '✗ ' + e.message, 'err'); }
 }
 async function quickPublish(id) { await openStory(id); doPublish(); }
 async function cleanupEmpty() {
@@ -1077,6 +1125,20 @@ async function doQC() {
   await openStory(curId);
   idle($('#ed-status'), '✓ 质检完成', 'ok');
 }
+async function doExpand(auto) {
+  const st = $('#ed-status');
+  await saveStory();
+  busy(st, '扩写轮执行中：逐节扩写欠字的节…');
+  try {
+    const {task_id} = await api(`/api/stories/${curId}/expand`, {method: 'POST'});
+    await poll(task_id, s => busy(st, s));
+    await openStory(curId);
+    idle(st, '✓ 扩写轮完成', 'ok');
+  } catch (e) {
+    if (auto) throw e;
+    idle(st, '✗ ' + e.message, 'err');
+  }
+}
 async function doReview(auto) {
   await saveStory();
   const st = $('#ed-status');
@@ -1133,9 +1195,10 @@ async function autoRun() {
   }
   _autoBusy = true;
   const steps = [['质检', () => doQC(true)], ['审稿', () => doReview(true)], ['修稿', () => doPolish(true)], ['入库', () => approve(true)]];
+  if (s0.word_count && s0.word_count < 5500) steps.unshift(['扩写', () => doExpand(true)]);
   try {
     for (let i = 0; i < steps.length; i++) {
-      busy(st, `▶ 全自动 ${i + 1}/4：${steps[i][0]}中…`);
+      busy(st, `▶ 全自动 ${i + 1}/${steps.length}：${steps[i][0]}中…`);
       try { await steps[i][1](); }
       catch (e) {
         idle(st, `✗ 自动流程在「${steps[i][0]}」中断：${e.message}（已完成步骤保留，可单独重试）`, 'err');
@@ -1270,6 +1333,9 @@ async function loadConfig() {
   $('#cfg-proto').value = c.protocol || 'openai';
   $('#cfg-model').value = c.model || '';
   $('#cfg-key').value = c.api_key || '';
+  $('#cfg-fb-base').value = c.fallback_api_base || '';
+  $('#cfg-fb-key').value = c.fallback_api_key || '';
+  $('#cfg-fb-model').value = c.fallback_model || '';
   $('#cfg-writer').value = c.writer_url || '';
   $('#cfg-temp').value = c.temperature_write != null ? c.temperature_write : 0.85;
   $('#cfg-nomax').checked = !!c.no_max_tokens;
@@ -1279,6 +1345,9 @@ async function saveConfig() {
   CFG = await api('/api/config', {method: 'POST', body: JSON.stringify({
     api_base: $('#cfg-base').value, model: $('#cfg-model').value,
     api_key: $('#cfg-key').value, protocol: $('#cfg-proto').value,
+    fallback_api_base: $('#cfg-fb-base').value,
+    fallback_api_key: $('#cfg-fb-key').value,
+    fallback_model: $('#cfg-fb-model').value,
     writer_url: $('#cfg-writer').value,
     temperature_write: parseFloat($('#cfg-temp').value) || 0.85,
     no_max_tokens: $('#cfg-nomax').checked,

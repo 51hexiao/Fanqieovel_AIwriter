@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
-"""冒烟测试：不起模型，验证接口与质检逻辑。"""
+"""冒烟测试：不起模型，验证接口与质检逻辑。
+数据整体隔离在临时目录（FANQIE_DATA_DIR）：绝不读写真实 data.db / config.json。"""
+import os
+import tempfile
+
+os.environ["FANQIE_DATA_DIR"] = tempfile.mkdtemp(prefix="fanqie_smoke_")
+
 import time
+import json
 
 from fastapi.testclient import TestClient
 
@@ -994,3 +1001,143 @@ _rng57 = random.Random(7)
 _ips57 = {pools.sample_fan_combo(_rng57)["ip"] for _ in range(300)}
 ok57 &= "宝可梦" in _ips57
 print("57) 宝可梦二创:", ok57)
+
+# 58) 断点续写：_write_missing_sections 跳过已有节补写缺失节；resume 守卫
+import paths
+_gen = appmod.generator
+usrc = io.open("static/index.html", encoding="utf-8").read()
+ok58 = ("def resume_story" in gsrc55 and "def _write_missing_sections" in gsrc55
+        and "/api/stories/{sid}/resume" in inspect.getsource(appmod)
+        and "resumeStory" in usrc)
+_calls58 = []
+_orig_chat58 = _gen.llm.chat
+def _fake_chat58(msgs, **kw):
+    _calls58.append(msgs)
+    return "续写正文内容。" * 200 + "\n摘要：续写的一节"
+_gen.llm.chat = _fake_chat58
+_t58 = {"id": 999901, "title": "断稿测试", "line": "悬疑", "combo": "组合x"}
+_s58 = db.create_story(_t58, {"sections": [{"no": 1, "beats": [], "hook": ""},
+                                           {"no": 2, "beats": [], "hook": ""},
+                                           {"no": 3, "beats": [], "hook": ""}],
+                              "characters": [], "clues": []},
+                       title="断稿测试", sec_words=1350)
+db.append_section(_s58, 1, "第一节内容。" * 120, "一")
+db.append_section(_s58, 2, "第二节内容。" * 120, "二")
+_st58 = _gen._write_missing_sections(_s58, log=lambda *a: None)
+_secs58 = db.get_story(_s58)["sections"]
+ok58 &= (len(_secs58) == 3 and len(_calls58) == 1 and _st58["status"] == "generated")
+db.update_story(_s58, status="approved")
+try:
+    _gen.resume_story(_s58, log=lambda *a: None)
+    ok58 = False
+except RuntimeError:
+    pass
+_gen.llm.chat = _orig_chat58
+print("58) 断点续写:", ok58)
+
+# 59) 扩写轮：低于单节下限的节被替换为更长的稿；autoRun 自动加扩写步
+ok59 = ("def expand_pass" in gsrc55 and "def maybe_expand" in gsrc55
+        and "SYS_EXPAND" in io.open("prompts.py", encoding="utf-8").read()
+        and "/api/stories/{sid}/expand" in inspect.getsource(appmod)
+        and "doExpand" in usrc and "steps.unshift(['扩写'" in usrc)
+_m59 = prompts.expand_section_messages(
+    {"title": "x", "line": "悬疑", "outline": {"timeline": "主角26岁"}}, 2, "原文", 1297)
+ok59 &= ("至少 1297" in _m59[1]["content"] and "时间账" in _m59[1]["content"])
+_s59 = db.create_story({"id": 999902, "title": "扩写测试", "line": "悬疑"},
+                       {"sections": [{"no": 1, "beats": [], "hook": ""}],
+                        "characters": [], "clues": []},
+                       title="扩写测试", sec_words=1350)
+db.append_section(_s59, 1, "短。" * 250, "s")
+_gen.llm.chat = lambda msgs, **kw: "长。" * 1300
+_gen.expand_pass(_s59, log=lambda *a: None)
+ok59 &= db.get_story(_s59)["word_count"] >= 1147
+_gen.llm.chat = _orig_chat58
+print("59) 扩写轮:", ok59)
+
+# 60) 批量全自动：写→扩写→质量环→入库整链；单篇失败重试一次，再败跳过
+src_app60 = inspect.getsource(appmod)
+ok60 = ("def batch_auto" in gsrc55 and "def _chain_one" in gsrc55
+        and "/api/topics/batch-write" in src_app60 and "batch-write" in usrc
+        and "批量全自动" in usrc)
+_tried60 = {}
+with db._conn() as _c60:
+    for _t60 in (999902, 999903, 999904, 999905):
+        _c60.execute(
+            "INSERT OR REPLACE INTO topics(id, data_json, status) VALUES(?, ?, 'new')",
+            (_t60, json.dumps({"id": _t60, "title": "批量稿%d" % _t60,
+                               "line": "悬疑", "combo": "组合%d" % _t60,
+                               "tier": "标准"}, ensure_ascii=False),))
+db.use_topic(999902)
+_orig_chain60 = _gen._chain_one
+def _fake_chain60(topic, log):
+    tid = topic["id"]
+    _tried60[tid] = _tried60.get(tid, 0) + 1
+    if tid == 999904 and _tried60[tid] == 1:
+        raise RuntimeError("网络抖动")
+    if tid == 999905:
+        raise RuntimeError("一直失败")
+    return 888000 + tid, ("skip" if tid == 999903 else "ok")
+_gen._chain_one = _fake_chain60
+_r60 = _gen.batch_auto([999902, 999903, 999904, 999905], log=lambda *a: None)
+_gen._chain_one = _orig_chain60
+ok60 &= (_r60["ok"] == [1887902, 1887904] and _r60["skip"] == [1887903]
+         and _r60["failed"] == [999905] and _tried60[999904] == 2)
+print("60) 批量全自动:", ok60)
+
+# 61) 备用模型降级：主模型重试耗尽后换备用配置再试一次
+llmsrc61 = io.open("llm.py", encoding="utf-8").read()
+apps61 = io.open("app.py", encoding="utf-8").read()
+ok61 = ("fallback_api_key" in llmsrc61 and "切换备用模型" in llmsrc61
+        and "fallback_api_base" in apps61)
+_llm61 = appmod.llm
+_orig_o61, _orig_load61 = _llm61._chat_openai, _llm61.load
+def _fake_openai61(c, messages, temp, max_tokens):
+    if c["model"] == "main-model":
+        def bad():
+            raise RuntimeError("boom")
+        return bad
+    def good():
+        return "FALLBACK-OK"
+    return good
+_llm61._chat_openai = _fake_openai61
+_llm61.load = lambda: {"api_key": "k", "model": "main-model", "protocol": "openai",
+                       "fallback_api_key": "fk", "fallback_model": "backup-model",
+                       "fallback_api_base": "", "temperature_write": 0.5,
+                       "timeout": 5, "no_max_tokens": False}
+try:
+    ok61 &= _llm61.chat([{"role": "user", "content": "hi"}], retries=1,
+                        log=lambda *a: None) == "FALLBACK-OK"
+except Exception:
+    ok61 = False
+_llm61._chat_openai, _llm61.load = _orig_o61, _orig_load61
+print("61) 备用模型降级:", ok61)
+
+# 62) 作品数据回流：快照存取 + 战绩注入选题提示词 + 只读抓取入口
+ok62 = ("def save_work_stats" in io.open("db.py", encoding="utf-8").read()
+        and "def _scrape_work_stats" in src_app60 and "/api/works/scrape" in src_app60
+        and "def _own_stats_rows" in gsrc55 and "scrapeWorks" in usrc
+        and "抓数据" in usrc and "WORKS[" in usrc)
+db.save_work_stats([{"story_id": _s58, "title": "断稿测试", "reads": 12300,
+                     "shows": 0, "recommends": 5}])
+_ws62 = db.latest_work_stats()
+ok62 &= (len(_ws62) == 1 and _ws62[0]["reads"] == 12300
+         and _ws62[0]["status_text"] == "")
+ok62 &= appmod._num_cn("1.2万") == 12000 and appmod._num_cn("3,400") == 3400
+_rows62 = _gen._own_stats_rows(log=lambda *a: None)
+ok62 &= (isinstance(_rows62, list) and _rows62
+         and _rows62[0]["title"] == "断稿测试" and _rows62[0]["reads"] == 12300)
+_c62 = {"main": "男频", "plot": "打脸", "bg": "都市", "emo": "爽",
+        "stance": "清醒", "engine": "证据"}
+_m62 = prompts.topic_messages([_c62], [], "悬疑",
+                              own_stats=[{"line": "悬疑", "title": "断稿测试",
+                                          "reads": 12300, "combo": "组合x"}])
+ok62 &= ("自家战绩" in _m62[1]["content"] and "12300" in _m62[1]["content"])
+_m62n = prompts.topic_messages([_c62], [], "悬疑")
+ok62 &= "自家战绩" not in _m62n[1]["content"]
+print("62) 作品数据回流:", ok62)
+
+# 63) 测试隔离：冒烟库落在临时目录，不碰项目根真实数据
+ok63 = (str(paths.DATA_DIR).startswith(tempfile.gettempdir())
+        and "fanqie_smoke_" in str(paths.DATA_DIR)
+        and not (paths.DATA_DIR / "config.json").exists())
+print("63) 测试数据隔离:", ok63)

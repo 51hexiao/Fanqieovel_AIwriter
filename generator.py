@@ -92,10 +92,12 @@ def _gen_line_topics(n, log, line, hot=""):
         hot_stories = _rows[:8] or None
         if hot_stories:
             log('注入热门故事榜：' + '、'.join(s['title'] for s in hot_stories[:4]) + '…')
+    own_stats = _own_stats_rows(log)
     data = llm.ask_json(prompts.topic_messages(combos, recent, line,
                                           bench_titles=titles or None,
                                           hot_words=hot_words or None,
-                                          picks=picks, hot_stories=hot_stories),
+                                          picks=picks, hot_stories=hot_stories,
+                                          own_stats=own_stats),
                    temperature=1.0, max_tokens=3000, log=log, want_list=True, item_key="title")
     items = _as_list(data)[:n]
     out = []
@@ -162,27 +164,40 @@ def start_story(topic, log=print, sec_words=0):
         log("标题生成失败，沿用选题标题：" + str(exc))
     sid = db.create_story(topic, outline, title=new_title, sec_words=sec_words)
     db.update_story(sid, variant=(f"{vr['key']}·{vr['name']}" if vr else ""))
+    _write_missing_sections(sid, log, mkt_rules)
+    return sid
 
-    def _write_section(story, i, total, hooks, msgs_extra=""):
-        msgs = prompts.section_messages(story, i, total, hooks=hooks,
-                                        market_rules=mkt_rules)
-        if msgs_extra:
-            msgs = [msgs[0], dict(msgs[1])]
-            msgs[1]["content"] += msgs_extra
-        raw = llm.chat(msgs, temperature=llm.cfg("temperature_write", 0.85),
-                       max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
-        m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
-        summary = m.group(1).strip() if m else ""
-        text = (raw[:m.start()] if m else raw).strip()
-        text = re.sub(r"^```[a-z]*\n?|```$", "", text).strip()
-        return text, summary
 
+def _write_section(story, i, total, hooks, mkt_rules=None, msgs_extra=""):
+    msgs = prompts.section_messages(story, i, total, hooks=hooks,
+                                    market_rules=mkt_rules)
+    if msgs_extra:
+        msgs = [msgs[0], dict(msgs[1])]
+        msgs[1]["content"] += msgs_extra
+    raw = llm.chat(msgs, temperature=llm.cfg("temperature_write", 0.85),
+                   max_tokens=max(3500, int((story.get("sec_words") or 1350) * 2.2)))
+    m = re.search(r"摘要[:：]\s*([^\n]+)", raw)
+    summary = m.group(1).strip() if m else ""
+    text = (raw[:m.start()] if m else raw).strip()
+    text = re.sub(r"^```[a-z]*\n?|```$", "", text).strip()
+    return text, summary
+
+
+def _write_missing_sections(sid, log=print, mkt_rules=None):
+    """写出所有缺失的分节；全新写作与断点续写共用这一条路，完成置 generated。"""
+    story = db.get_story(sid)
+    outline = story.get("outline") or {}
     total = len(outline.get("sections", [])) or 5
+    have = {s["no"] for s in (story.get("sections") or [])}
+    if have:
+        log(f"断点续写：已有 {len(have)} 节，补写其余 {total - len(have)} 节")
     for i in range(1, total + 1):
+        if i in have:
+            continue
         log(f"撰写第 {i}/{total} 节…")
         story = db.get_story(sid)
         hooks = None
-        if i == 1:  # 开篇样板：热门故事榜真实开篇 + AI 拆解出的钩子手法
+        if i == 1 and not have:  # 开篇样板：只在全新写作第一节时注入
             _hs, _seen = [], set()
             for s in sorted(db.latest_market_stories(120),
                             key=lambda x: 0 if x.get("subtab") == "黑马飙升" else 1):
@@ -200,14 +215,14 @@ def start_story(topic, log=print, sec_words=0):
             hooks = _hs[:4] or None
             if hooks:
                 log("注入热门开篇样板 ×" + str(len(hooks)))
-        text, summary = _write_section(story, i, total, hooks)
+        text, summary = _write_section(story, i, total, hooks, mkt_rules)
         # 字数下限：模型欠发时自动扩写重试一次，只采纳更长的稿
         floor = int((story.get("sec_words") or 1350) * 0.85)
         if floor and db.cjk_len(text) < floor:
             n0 = db.cjk_len(text)
             log(f"第 {i} 节只有 {n0} 字（下限 {floor}），扩写重试…")
             text2, summary2 = _write_section(
-                story, i, total, hooks,
+                story, i, total, hooks, mkt_rules,
                 msgs_extra=(f"\n\n【扩写重试（最高优先）】你上一稿本节只有 {n0} 字，"
                             f"远低于本节要求。重写本节：把每个情节点当成完整场景写——"
                             "冲突多走一轮，对话与细节给足，情绪多压一层再放；"
@@ -222,7 +237,145 @@ def start_story(topic, log=print, sec_words=0):
     db.update_story(sid, status="generated")
     s = db.get_story(sid)
     log(f"完成《{s['title']}》，约 {s['word_count']} 字")
-    return sid
+    return s
+
+
+def resume_story(sid, log=print):
+    """断点续写：写作中途失败留下的「生成中」断稿，从缺的节继续。"""
+    story = db.get_story(sid)
+    if not story:
+        raise RuntimeError("稿件不存在")
+    if not story.get("outline"):
+        raise RuntimeError("这篇稿子连大纲都没有（大纲阶段就断了），无法续写；请删掉后从选题重写")
+    if story.get("status") not in ("generating", "generated"):
+        raise RuntimeError("只有「生成中/待处理」的稿件可以续写")
+    log(f"续写《{story['title']}》：检测断点…")
+    return _write_missing_sections(sid, log)
+
+
+def expand_pass(sid, log=print):
+    """扩写轮：把低于单节下限的节逐节扩写（只采纳更长的稿），字数闭环用。"""
+    story = db.get_story(sid)
+    if not story:
+        raise RuntimeError("稿件不存在")
+    have = story.get("sections") or []
+    if not have:
+        raise RuntimeError("没有分节内容，先写完再扩写")
+    sec_words = int(story.get("sec_words") or 1350)
+    floor = int(sec_words * 0.85)
+    changed = 0
+    for sec in have:
+        n = db.cjk_len(sec.get("text") or "")
+        if n >= floor:
+            continue
+        target = floor + 150
+        log(f"第 {sec['no']} 节 {n} 字（下限 {floor}），扩写…")
+        msgs = prompts.expand_section_messages(story, sec["no"], sec["text"], target)
+        raw = llm.chat(msgs, temperature=0.8,
+                       max_tokens=max(3500, int(sec_words * 2.2)))
+        text = re.sub(r"^```[a-z]*\n?|```$", "", (raw or "")).strip()
+        m = re.search(r"摘要[:：]\s*([^\n]+)", text)
+        if m:
+            text = text[:m.start()].strip()
+        if db.cjk_len(text) > n:
+            db.append_section(sid, sec["no"], text, sec.get("summary") or "")
+            changed += 1
+            story = db.get_story(sid)
+        else:
+            log(f"第 {sec['no']} 节扩写没变长，保留原稿")
+    s = db.get_story(sid)
+    tail = "" if s["word_count"] >= 5500 else "（全文仍不足5500，可再跑一轮或手动处理）"
+    log(f"扩写轮结束：更新 {changed} 节，全文约 {s['word_count']} 字{tail}")
+    return s
+
+
+def maybe_expand(s, log=print):
+    """字数闭环：全文低于5500字时自动跑一轮扩写（批量链/一键全自动调用）。"""
+    if s and 0 < (s.get("word_count") or 0) < 5500:
+        log(f"全文只有 {s['word_count']} 字（下限5500），自动扩写一轮…")
+        return expand_pass(s["id"], log)
+    return s
+
+
+def _story_for_topic(tid):
+    """选题→已有稿件（topic_json 里存着完整选题，含 id）。"""
+    for sid, tj in db.story_topic_map().items():
+        if isinstance(tj, dict) and tj.get("id") == tid:
+            return db.get_story(sid)
+    return None
+
+
+def _chain_one(topic, log):
+    """单篇全自动：写作（或断点续写）→ 字数不足自动扩写 → 质量环 → 入库。"""
+    s = _story_for_topic(topic["id"])
+    if s and s.get("status") in ("approved", "published"):
+        log(f"《{s['title']}》已在库，跳过")
+        return s["id"], "skip"
+    if s and s.get("status") in ("generating", "generated"):
+        log(f"发现断稿《{s['title']}》，从断点续写…")
+        sid = s["id"]
+        resume_story(sid, log)
+    else:
+        db.use_topic(topic["id"])
+        sid = start_story(topic, log=log,
+                          sec_words=WORD_TIERS.get(topic.get("tier") or "标准", 0))
+    s = maybe_expand(db.get_story(sid), log)
+    quality_loop(sid, "", log)
+    db.update_story(sid, status="approved")
+    s = db.get_story(sid)
+    log(f"✓ 《{s['title']}》入库（{s['word_count']} 字）")
+    return sid, "ok"
+
+
+def batch_auto(tids, log=print):
+    """批量全自动：按勾选顺序逐篇 写→扩写→质量环→入库；单篇失败自动重试一次，再败跳过。"""
+    ok, skip, failed = [], [], []
+    for i, tid in enumerate(tids, 1):
+        topic = {t["id"]: t for t in db.list_topics()}.get(tid)
+        if not topic:
+            log(f"—— 批量 {i}/{len(tids)}：选题 #{tid} 已不存在，跳过 ——")
+            failed.append(tid)
+            continue
+        log(f"—— 批量 {i}/{len(tids)}：《{topic.get('title', '')}》——")
+        try:
+            sid, st = _chain_one(topic, log)
+            (ok if st == "ok" else skip).append(sid)
+        except Exception as e:
+            log(f"✗ 失败：{str(e)[:160]}，重试一次…")
+            try:
+                sid, st = _chain_one(topic, log)
+                (ok if st == "ok" else skip).append(sid)
+            except Exception as e2:
+                log(f"✗ 重试仍失败：{str(e2)[:160]}，跳过这篇继续")
+                failed.append(tid)
+    log(f"批量完成：入库 {len(ok)} 篇，跳过 {len(skip)} 篇，失败 {len(failed)} 个选题")
+    return {"ok": ok, "skip": skip, "failed": failed}
+
+
+def _own_stats_rows(log=print):
+    """自家战绩：works_stats 最新快照 × 稿件线别/组合，出过数据的方向反哺选题。"""
+    try:
+        rows = db.latest_work_stats()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    tmap = db.story_topic_map()
+    out = []
+    for w in rows:
+        sid = w.get("story_id") or 0
+        tj = tmap.get(sid) or {}
+        if not tj:
+            continue
+        out.append({"line": tj.get("line") or "悬疑", "title": tj.get("title") or "",
+                    "reads": int(w.get("reads") or 0),
+                    "combo": tj.get("combo") or ""})
+    if not out:
+        return None
+    out.sort(key=lambda x: -x["reads"])
+    log("注入自家战绩：" + "、".join(f"{r['title']}（{r['reads']}阅）"
+                                  for r in out[:3]) + "…")
+    return out[:6]
 
 
 def review_story(sid, log=print):
@@ -385,7 +538,7 @@ def fact_qc_story(story, log=print):
 def audit_story(sid, note, ledger=None, log=print):
     story = db.get_story(sid)
     line = story.get("line") or "悬疑"
-    o = _load_json_field(story, "outline_json") or {}
+    o = story.get("outline") or {}
     chars = "、".join(str(c.get("name", "")) for c in (o.get("characters") or [])
                       if isinstance(c, dict) and c.get("name"))
     rows = []

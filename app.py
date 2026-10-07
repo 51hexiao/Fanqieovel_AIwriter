@@ -2,6 +2,7 @@
 """番茄短故事工作台 - 桌面版后端服务，由 desktop.py 以线程方式启动。"""
 import json
 import random
+import re
 import threading
 import time
 import uuid
@@ -76,8 +77,10 @@ def get_config():
 
 @app.post("/api/config")
 def set_config(payload: dict):
-    allowed = {"api_base", "api_key", "model", "protocol", "writer_url",
-               "temperature_write", "sec_words", "no_max_tokens", "timeout"}
+    allowed = {"api_base", "api_key", "model", "protocol",
+               "fallback_api_base", "fallback_api_key", "fallback_model",
+               "writer_url", "temperature_write", "sec_words",
+               "no_max_tokens", "timeout"}
     return llm.save({k: v for k, v in payload.items() if k in allowed})
 
 
@@ -357,6 +360,34 @@ def start_quality(sid: int, b: NoteIn):
     if not db.get_story(sid):
         raise HTTPException(404, "稿件不存在")
     return start_task("quality", lambda log: generator.quality_loop(sid, b.note, log))
+
+
+@app.post("/api/stories/{sid}/resume")
+def resume_story(sid: int):
+    if not db.get_story(sid):
+        raise HTTPException(404, "稿件不存在")
+    return start_task("resume", lambda log: generator.resume_story(sid, log))
+
+
+@app.post("/api/stories/{sid}/expand")
+def expand_story(sid: int):
+    s = db.get_story(sid)
+    if not s:
+        raise HTTPException(404, "稿件不存在")
+    if s["status"] not in ("generated", "approved"):
+        raise HTTPException(400, "只有「待处理/已入库」的稿件可以扩写")
+    return start_task("expand", lambda log: generator.expand_pass(sid, log))
+
+
+class BatchIn(BaseModel):
+    tids: list
+
+
+@app.post("/api/topics/batch-write")
+def batch_write(b: BatchIn):
+    if not b.tids:
+        raise HTTPException(400, "没有勾选任何选题")
+    return start_task("batch", lambda log: generator.batch_auto(b.tids, log))
 
 
 MANAGE_URL = "https://fanqienovel.com/main/writer/short-manage"
@@ -931,6 +962,139 @@ def _open_writer_browser(sid, log):
             except Exception:
                 pass
     return True
+
+
+def _num_cn(s):
+    """'1.2万'/'3,400'/'8.5万' → 整数；解析不了返回 0。"""
+    t = str(s or "").strip().replace(",", "")
+    m = re.search(r"([\d\.]+)\s*([万亿kKwW]?)", t)
+    if not m:
+        return 0
+    try:
+        v = float(m.group(1))
+    except Exception:
+        return 0
+    mult = {"万": 10000, "w": 10000, "W": 10000, "k": 1000, "K": 1000,
+            "亿": 100000000}.get(m.group(2), 1)
+    return int(v * mult)
+
+
+def _parse_works_text(txt, log):
+    """从管理页文本解析作品数据。后台结构随时会改，所以走锚点容错解析：
+    以自家稿件标题为锚，标题后 400 字内按标签就近配对数字；
+    解析不到数字的只存原始片段，等真实页面跑一次后好校准。"""
+    rows = []
+    matched = 0
+    for s in db.list_stories():
+        t = (s["title"] or "").strip()
+        if not t:
+            continue
+        i = txt.find(t[:12])
+        seg = txt[i:i + 400] if i >= 0 else ""
+        row = {"story_id": s["id"], "title": t, "shows": 0, "reads": 0,
+               "recommends": 0, "collects": 0, "status_text": "",
+               "raw": seg[:400] if i >= 0 else ""}
+        if i >= 0:
+            matched += 1
+            for key, label in (("shows", "展现"), ("reads", "阅读"),
+                               ("recommends", "推荐"), ("collects", "收藏")):
+                m = re.search(label + r"[^\d]{0,8}([\d,\.]+\s*[万亿kKwW]?)", seg)
+                if m:
+                    row[key] = _num_cn(m.group(1))
+            mst = re.search(r"(审核中|发布成功|已发布|审核未通过|创作中)", seg)
+            if mst:
+                row["status_text"] = mst.group(1)
+        rows.append(row)
+    log(f"按标题锚点匹配到 {matched}/{len(rows)} 篇已入库作品")
+    return rows
+
+
+def _scrape_work_stats(log):
+    """自家作品数据回流（只读）：复用常驻发布助手浏览器打开管理页，
+    抓取作品列表文本入库；全程只读页面，不点击任何按钮、不做写操作。"""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        raise RuntimeError("未安装 playwright，作品数据抓取不可用")
+    port = 9333
+    if CDP_STATE.exists():
+        try:
+            port = int(json.loads(CDP_STATE.read_text(encoding="utf-8"))["port"])
+        except Exception:
+            pass
+    with sync_playwright() as p:
+        browser = None
+        if _cdp_alive(port):
+            try:
+                browser = p.chromium.connect_over_cdp(
+                    f"http://127.0.0.1:{port}", timeout=8000)
+                log("已连接常驻浏览器（复用同一窗口与登录）")
+            except Exception:
+                browser = None
+        if browser is None:
+            exe = _find_local_browser()
+            if not exe:
+                raise RuntimeError("未找到 Edge/Chrome，无法启动浏览器；"
+                                   "可先点「发布」完成一次登录再来抓取")
+            import subprocess
+            subprocess.Popen([exe, f"--remote-debugging-port={port}",
+                              f"--user-data-dir={paths.DATA_DIR / 'browser_profile'}",
+                              "--no-first-run", "--no-default-browser-check",
+                              "about:blank"])
+            for _ in range(40):
+                if _cdp_alive(port):
+                    break
+                time.sleep(0.5)
+            if not _cdp_alive(port):
+                raise RuntimeError("浏览器启动失败，请重试")
+            browser = p.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}", timeout=8000)
+            CDP_STATE.write_text(json.dumps({"port": port}), encoding="utf-8")
+            log("浏览器已启动（常驻）：首次使用请在这里登录番茄账号")
+        ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+        page = ctx.pages[0] if ctx.pages else ctx.new_page()
+        try:
+            log("打开短故事管理页（只读抓取，不做任何写操作）…")
+            page.goto(MANAGE_URL, wait_until="domcontentloaded")
+            hint = False
+            deadline = time.time() + 600
+            while time.time() < deadline:
+                on_login = any("/writer/login" in (pg.url or "")
+                               or "passport" in (pg.url or "") for pg in ctx.pages)
+                if on_login:
+                    if not hint:
+                        log("检测到登录页：请在浏览器里完成登录（验证码自己操作），"
+                            "登录后自动继续抓取")
+                    hint = True
+                else:
+                    try:
+                        txt = page.inner_text("body")
+                    except Exception:
+                        txt = ""
+                    if txt and len(txt) > 200:
+                        rows = _parse_works_text(txt, log)
+                        if rows:
+                            db.save_work_stats(rows)
+                            log("作品数据快照已入库（最新一次抓取为准）")
+                            return rows
+                page.wait_for_timeout(2000)
+            raise RuntimeError("10 分钟内没抓到管理页内容：请确认已登录、"
+                               "账号下有短故事作品，再重试")
+        finally:
+            try:
+                browser.close()  # 仅断开连接，不关浏览器窗口
+            except Exception:
+                pass
+
+
+@app.get("/api/works")
+def get_works():
+    return db.latest_work_stats()
+
+
+@app.post("/api/works/scrape")
+def scrape_works():
+    return start_task("works", lambda log: _scrape_work_stats(log))
 
 
 @app.post("/api/stories/{sid}/publish")

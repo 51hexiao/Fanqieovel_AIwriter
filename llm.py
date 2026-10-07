@@ -18,6 +18,9 @@ DEFAULTS = {
     "api_key": "",
     "model": "glm-4.6",
     "protocol": "openai",
+    "fallback_api_base": "",
+    "fallback_api_key": "",
+    "fallback_model": "",
     "temperature_write": 0.85,
     "writer_url": "https://fanqienovel.com/writer",
     "sec_words": 1350,
@@ -132,7 +135,7 @@ def _chat_gemini(c, messages, temp, max_tokens):
     return go
 
 
-def chat(messages, temperature=None, max_tokens=3500, retries=2):
+def chat(messages, temperature=None, max_tokens=3500, retries=2, log=None):
     c = load()
     if not c.get("api_key") or not c.get("model"):
         raise RuntimeError("请先在【设置】里填写 API Key 和模型名")
@@ -149,6 +152,29 @@ def chat(messages, temperature=None, max_tokens=3500, retries=2):
             last = e
             if i < retries:
                 time.sleep(2 + 2 * i)
+    # 备用模型降级：主模型连续失败时，若有备用配置则换道再试一次
+    fb_key = (c.get("fallback_api_key") or "").strip()
+    fb_model = (c.get("fallback_model") or "").strip()
+    if fb_key and fb_model:
+        c2 = dict(c)
+        if (c.get("fallback_api_base") or "").strip():
+            c2["api_base"] = c["fallback_api_base"].strip()
+        c2["api_key"] = fb_key
+        c2["model"] = fb_model
+        try:
+            (log or print)("主模型连续失败（" + _friendly(last)[:80]
+                           + "），切换备用模型 " + fb_model + " 重试…")
+        except Exception:
+            pass
+        if c.get("protocol") == "gemini":
+            send2 = _chat_gemini(c2, messages, temp, max_tokens)
+        else:
+            send2 = _chat_openai(c2, messages, temp, max_tokens)
+        try:
+            return send2()
+        except Exception as e2:
+            raise RuntimeError("主模型：" + _friendly(last)
+                               + "；备用模型：" + _friendly(e2))
     raise RuntimeError("模型调用失败：" + _friendly(last))
 
 
